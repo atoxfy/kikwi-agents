@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright 2026 Atoxfy and/or licensed to Atoxfy
+  ~ under one or more contributor license agreements. See the NOTICE file
+  ~ distributed with this work for additional information regarding copyright
+  ~ ownership. Atoxfy licenses this file to you under the Apache License,
+  ~ Version 2.0; you may not use this file except in compliance with the License.
+  ~ You may obtain a copy of the License at
+  ~
+  ~     http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing, software
+  ~ distributed under the License is distributed on an "AS IS" BASIS,
+  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  ~ See the License for the specific language governing permissions and
+  ~ limitations under the License.
+  -->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>io.kikwiflow.agents</groupId>
+        <artifactId>kikwi-agents-parent</artifactId>
+        <version>0.1.0</version>
+    </parent>
+
+    <artifactId>agents-spring-boot-starter</artifactId>
+    <name>kikwi-agents :: Spring Boot Starter</name>
+    <description>Plataforma de agentes sobre o motor Kikwiflow embutido: catálogo, worker de missões, processos como ferramenta, conversas omnicanal. O host traz os canais (roteador de canais com OutboundGateway), a credencial de LLM por tenant e pode trocar o armazenamento.</description>
+
+    <dependencies>
+        <dependency><groupId>io.kikwiflow.agents</groupId><artifactId>agents-runtime</artifactId></dependency>
+        <dependency><groupId>io.kikwiflow.agents</groupId><artifactId>agents-dms-client</artifactId></dependency>
+        <dependency><groupId>io.kikwiflow.agents</groupId><artifactId>agents-llm-anthropic</artifactId></dependency>
+        <dependency><groupId>io.kikwiflow.agents</groupId><artifactId>agents-llm-gemini</artifactId></dependency>
+        <dependency><groupId>io.kikwiflow.agents</groupId><artifactId>agents-llm-fake</artifactId></dependency>
+        <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-web</artifactId></dependency>
+        <dependency><groupId>io.kikwiflow</groupId><artifactId>kikwi-spring-boot-starter</artifactId><version>${kikwiflow.version}</version></dependency>
+        <dependency><groupId>io.kikwiflow</groupId><artifactId>kikwi-runtime-persistence-mongodb-spring-boot-starter</artifactId><version>${kikwiflow.version}</version></dependency>
+        <dependency><groupId>io.kikwiflow</groupId><artifactId>kikwi-runtime-query-spring-boot-starter</artifactId><version>${kikwiflow.version}</version></dependency>
+        <dependency><groupId>io.kikwiflow</groupId><artifactId>kikwi-management-rest-spring-boot-starter</artifactId><version>${kikwiflow.version}</version></dependency>
+        <dependency><groupId>io.kikwiflow</groupId><artifactId>kikwi-monitor-spring-boot-starter</artifactId><version>${kikwiflow.version}</version></dependency>
+        <dependency><groupId>io.kikwiflow</groupId><artifactId>kikwi-connector-http</artifactId><version>${kikwiflow.version}</version></dependency>
+        <dependency><groupId>io.kikwiflow</groupId><artifactId>kikwi-in-memory-addons</artifactId><version>${kikwiflow.version}</version><scope>test</scope></dependency>
+        <dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId><scope>test</scope></dependency>
+        <dependency><groupId>org.assertj</groupId><artifactId>assertj-core</artifactId><scope>test</scope></dependency>
+    </dependencies>
+</project>

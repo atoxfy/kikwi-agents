@@ -1,0 +1,34 @@
+{
+  "key": "agendar-avaliacao",
+  "name": "Agendar avaliação",
+  "description": "Agenda a avaliação presencial do veículo numa loja.",
+  "extensionProperties": {
+    "kikwi:icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciLz4="
+  },
+  "variableDeclarations": [
+    { "key": "conversationId", "label": "Conversa", "format": "SHORT_TEXT" },
+    { "key": "dataHora", "label": "Data e hora da visita", "format": "DATETIME" },
+    { "key": "agenciaId", "label": "Loja", "format": "SHORT_TEXT" },
+    { "key": "agendamentoId", "label": "Id do agendamento", "format": "SHORT_TEXT" },
+    { "key": "rascunhoInterno", "label": "Rascunho interno", "format": "SHORT_TEXT" }
+  ],
+  "flowNodes": {
+    "PEDIDO": {
+      "id": "PEDIDO", "name": "Pedido de agendamento", "type": "DEFAULT_START_EVENT",
+      "outgoing": [ { "id": "f1", "targetNodeId": "AGENDAR" } ],
+      "extensionProperties": {},
+      "variableBindings": { "inputs": [ { "variable": "conversationId", "required": true }, { "variable": "dataHora", "required": true }, { "variable": "agenciaId" } ] }
+    },
+    "AGENDAR": {
+      "id": "AGENDAR", "name": "Reservar horário", "type": "EXECUTABLE_TASK", "executor": "agendaStub",
+      "outgoing": [ { "id": "f2", "targetNodeId": "AGENDADO" } ],
+      "extensionProperties": {},
+      "variableBindings": { "outputs": [ { "variable": "agendamentoId", "required": true } ] }
+    },
+    "AGENDADO": {
+      "id": "AGENDADO", "name": "Agendado", "type": "DEFAULT_END_EVENT", "outgoing": [], "extensionProperties": {},
+      "variableBindings": { "outputs": [ { "variable": "agendamentoId", "required": true }, { "variable": "dataHora", "required": true } ] }
+    }
+  },
+  "defaultStartPoint": "PEDIDO"
+}

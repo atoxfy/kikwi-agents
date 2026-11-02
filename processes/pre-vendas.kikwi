@@ -1,0 +1,826 @@
+{
+  "key": "pre-vendas",
+  "name": "Pré-vendas agêntica",
+  "description": "Agentes de IA conversam com o lead (site, depois WhatsApp/e-mail), qualificam o veículo e agendam a visita à agência; recuperação automática e escalação para consultor humano. Exige Kikwiflow 0.1.79+ (AGENT_TASK, doc 31).",
+  "sla": "",
+  "defaultStartPoint": "LEAD_RECEBIDO",
+  "extensionProperties": {
+    "kikwi:status": "draft",
+    "kikwi:requires": "AGENT_TASK (docs/engine/31-orquestracao-agentica.md, E1), formato FILE (E4)"
+  },
+  "variableDeclarations": [
+    {
+      "key": "conversationId",
+      "label": "Conversa",
+      "description": "Id da conversa na plataforma kikwi-agents (businessKey). A transcrição fica lá, não no processo.",
+      "format": "SHORT_TEXT"
+    },
+    {
+      "key": "canal",
+      "label": "Canal",
+      "format": "SINGLE_SELECT",
+      "options": [
+        {
+          "value": "WEBCHAT",
+          "label": "Site"
+        },
+        {
+          "value": "WHATSAPP",
+          "label": "WhatsApp"
+        },
+        {
+          "value": "EMAIL",
+          "label": "E-mail"
+        }
+      ]
+    },
+    {
+      "key": "origem",
+      "label": "Origem do lead",
+      "description": "Campanha ou página de origem.",
+      "format": "SHORT_TEXT"
+    },
+    {
+      "key": "leadNome",
+      "label": "Nome do lead",
+      "format": "SHORT_TEXT"
+    },
+    {
+      "key": "resultado",
+      "label": "Resultado",
+      "description": "Como a etapa terminou: AGENDADO (visita marcada), PERDIDO (lead desistiu ou não qualifica) ou HUMANO (precisa de atendente).",
+      "format": "SINGLE_SELECT",
+      "options": [
+        {
+          "value": "AGENDADO",
+          "label": "Visita agendada"
+        },
+        {
+          "value": "PERDIDO",
+          "label": "Perdido"
+        },
+        {
+          "value": "HUMANO",
+          "label": "Precisa de humano"
+        }
+      ]
+    },
+    {
+      "key": "motivoPerda",
+      "label": "Motivo da perda",
+      "format": "SINGLE_SELECT",
+      "options": [
+        {
+          "value": "PRECO",
+          "label": "Expectativa de preço"
+        },
+        {
+          "value": "VENDEU_OUTRO_LUGAR",
+          "label": "Vendeu em outro lugar"
+        },
+        {
+          "value": "DESISTIU",
+          "label": "Desistiu de vender"
+        },
+        {
+          "value": "SEM_RESPOSTA",
+          "label": "Parou de responder"
+        },
+        {
+          "value": "NAO_E_DONO",
+          "label": "Não é o dono do veículo"
+        },
+        {
+          "value": "OUTRO",
+          "label": "Outro"
+        }
+      ]
+    },
+    {
+      "key": "dataAgendamento",
+      "label": "Data e hora da visita",
+      "format": "DATETIME"
+    },
+    {
+      "key": "agenciaId",
+      "label": "Agência",
+      "description": "Id da franquia/agência onde a visita foi marcada.",
+      "format": "SHORT_TEXT"
+    },
+    {
+      "key": "veiculoMarca",
+      "label": "Marca",
+      "format": "SHORT_TEXT"
+    },
+    {
+      "key": "veiculoModelo",
+      "label": "Modelo",
+      "format": "SHORT_TEXT"
+    },
+    {
+      "key": "veiculoAno",
+      "label": "Ano do modelo",
+      "format": "INTEGER"
+    },
+    {
+      "key": "veiculoKm",
+      "label": "Quilometragem",
+      "format": "INTEGER"
+    },
+    {
+      "key": "placa",
+      "label": "Placa",
+      "format": "SHORT_TEXT",
+      "validationRegex": "^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$",
+      "validationMessage": "Placa no formato ABC1D23."
+    },
+    {
+      "key": "expectativaPreco",
+      "label": "Expectativa de preço",
+      "format": "MONEY",
+      "currency": "BRL"
+    },
+    {
+      "key": "fotosVeiculo",
+      "label": "Fotos do veículo",
+      "description": "Fotos enviadas pelo lead na conversa (referências dms://).",
+      "format": "FILE",
+      "extensionProperties": {
+        "kikwi:file.multiple": "true",
+        "kikwi:file.mimeTypes": "image/*",
+        "kikwi:file.maxCount": "10"
+      }
+    },
+    {
+      "key": "negocioCrmId",
+      "label": "Negócio no CRM",
+      "description": "Id do negócio criado no CRM do cliente.",
+      "format": "SHORT_TEXT"
+    }
+  ],
+  "flowNodes": {
+    "LEAD_RECEBIDO": {
+      "id": "LEAD_RECEBIDO",
+      "name": "Lead iniciou conversa",
+      "type": "DEFAULT_START_EVENT",
+      "description": "Primeira mensagem de um contato sem conversa ativa num canal do tenant; a plataforma inicia a instância com businessKey = conversationId.",
+      "commitBefore": false,
+      "commitAfter": false,
+      "outgoing": [
+        {
+          "id": "flow-start",
+          "name": "",
+          "description": "",
+          "targetNodeId": "QUALIFICAR",
+          "isDefault": false,
+          "handlesNull": false,
+          "expectedAnswer": null
+        }
+      ],
+      "extensionProperties": {},
+      "layout": {
+        "x": 0,
+        "y": 60
+      },
+      "variableBindings": {
+        "inputs": [
+          {
+            "variable": "conversationId",
+            "required": true
+          },
+          {
+            "variable": "canal",
+            "required": true
+          },
+          {
+            "variable": "origem",
+            "required": false
+          },
+          {
+            "variable": "leadNome",
+            "required": false
+          }
+        ],
+        "outputs": []
+      }
+    },
+    "QUALIFICAR": {
+      "id": "QUALIFICAR",
+      "name": "Qualificar e agendar (agente)",
+      "type": "AGENT_TASK",
+      "description": "Missão do agente de pré-vendas: qualificar o veículo e a intenção e agendar a visita. Substitui as etapas humanas AGUARDANDO_CONTATO/EM_QUALIFICACAO do processo comercial.",
+      "commitBefore": true,
+      "commitAfter": false,
+      "outgoing": [
+        {
+          "id": "flow-qualificar",
+          "name": "",
+          "description": "",
+          "targetNodeId": "GW_QUALIFICACAO",
+          "isDefault": false,
+          "handlesNull": false,
+          "expectedAnswer": null
+        }
+      ],
+      "extensionProperties": {
+        "kikwi:prompt": "Este lead chegou pelo {{canal}} (origem: {{origem}}) querendo vender um veículo. Nome informado: {{leadNome}}.\n\nObjetivo: entender o veículo e a intenção de venda e **agendar uma visita** a uma agência para avaliação presencial.\n\nColete, de forma natural e sem parecer formulário: marca, modelo, ano, km, placa e a expectativa de preço. Peça de 3 a 6 fotos (frente, traseira, laterais, painel com km, interior) com solicitar_midia. Use consultar_fipe para dar uma referência honesta e consultar_horarios / agendar_visita para marcar a visita na agência mais próxima.\n\nConclua com resultado AGENDADO quando a visita estiver marcada; PERDIDO se o lead desistir, não for o dono ou a expectativa for incompatível depois de você tentar contornar; HUMANO se o lead pedir uma pessoa ou houver situação fora do seu alcance.",
+        "kikwi:documentation": "Agente inicial. Persona e regras gerais ficam no perfil pre-vendas da plataforma; aqui só o objetivo desta etapa."
+      },
+      "layout": {
+        "x": 350,
+        "y": 0
+      },
+      "topic": "kikwi.agents",
+      "agentRef": {
+        "key": "pre-vendas",
+        "version": null
+      },
+      "tools": [
+        "solicitar_midia",
+        "consultar_fipe",
+        "consultar_horarios",
+        "agendar_visita"
+      ],
+      "limits": {
+        "maxTurns": 80,
+        "ttl": "P7D"
+      },
+      "boundaryEventIds": [
+        "SEM_RESPOSTA_24H",
+        "HUMANO_ASSUMIU_QUALIFICACAO"
+      ],
+      "variableBindings": {
+        "inputs": [
+          {
+            "variable": "conversationId",
+            "required": true
+          },
+          {
+            "variable": "canal",
+            "required": false
+          },
+          {
+            "variable": "origem",
+            "required": false
+          },
+          {
+            "variable": "leadNome",
+            "required": false
+          }
+        ],
+        "outputs": [
+          {
+            "variable": "resultado",
+            "required": true
+          },
+          {
+            "variable": "motivoPerda",
+            "required": false
+          },
+          {
+            "variable": "dataAgendamento",
+            "required": false
+          },
+          {
+            "variable": "agenciaId",
+            "required": false
+          },
+          {
+            "variable": "veiculoMarca",
+            "required": false
+          },
+          {
+            "variable": "veiculoModelo",
+            "required": false
+          },
+          {
+            "variable": "veiculoAno",
+            "required": false
+          },
+          {
+            "variable": "veiculoKm",
+            "required": false
+          },
+          {
+            "variable": "placa",
+            "required": false
+          },
+          {
+            "variable": "expectativaPreco",
+            "required": false
+          },
+          {
+            "variable": "fotosVeiculo",
+            "required": false
+          }
+        ]
+      }
+    },
+    "SEM_RESPOSTA_24H": {
+      "id": "SEM_RESPOSTA_24H",
+      "name": "Sem resposta em 24h",
+      "type": "BOUNDARY_INTERRUPTIVE_TIMER",
+      "description": "Lead parou de responder: a missão é interrompida e o agente de recuperação assume.",
+      "commitBefore": false,
+      "commitAfter": false,
+      "outgoing": [
+        {
+          "id": "flow-sem-resposta",
+          "name": "",
+          "description": "",
+          "targetNodeId": "RECUPERAR",
+          "isDefault": false,
+          "handlesNull": false,
+          "expectedAnswer": null
+        }
+      ],
+      "extensionProperties": {},
+      "layout": {
+        "x": 350,
+        "y": 260
+      },
+      "attachedToRef": "QUALIFICAR",
+      "providerType": "STATIC",
+      "staticValue": "PT24H"
+    },
+    "HUMANO_ASSUMIU_QUALIFICACAO": {
+      "id": "HUMANO_ASSUMIU_QUALIFICACAO",
+      "name": "Humano assumiu",
+      "type": "BOUNDARY_INTERRUPTIVE_CATCH_EVENT",
+      "description": "Um consultor assumiu a conversa no painel; a plataforma correlaciona humano-assumiu:<conversationId> e a missão é cancelada.",
+      "commitBefore": false,
+      "commitAfter": false,
+      "outgoing": [
+        {
+          "id": "flow-humano-assumiu-qualificacao",
+          "name": "",
+          "description": "",
+          "targetNodeId": "ATENDIMENTO_HUMANO",
+          "isDefault": false,
+          "handlesNull": false,
+          "expectedAnswer": null
+        }
+      ],
+      "extensionProperties": {},
+      "layout": {
+        "x": 350,
+        "y": 300
+      },
+      "attachedToRef": "QUALIFICAR",
+      "providerType": "TEMPLATE",
+      "correlationTemplates": [
+        {
+          "keySegments": [
+            {
+              "type": "LITERAL",
+              "value": "humano-assumiu:"
+            },
+            {
+              "type": "VARIABLE",
+              "value": "conversationId"
+            }
+          ],
+          "displayNameSegments": [
+            {
+              "type": "LITERAL",
+              "value": "Consultor assumiu a conversa"
+            }
+          ]
+        }
+      ]
+    },
+    "GW_QUALIFICACAO": {
+      "id": "GW_QUALIFICACAO",
+      "name": "Como terminou a qualificação?",
+      "type": "EXCLUSIVE_GATEWAY",
+      "description": "Roteia pela saída validada do agente (variável resultado).",
+      "commitBefore": false,
+      "commitAfter": false,
+      "outgoing": [
+        {
+          "id": "flow-q-agendado",
+          "name": "Agendado",
+          "description": "",
+          "targetNodeId": "CRIAR_NEGOCIO_CRM",
+          "isDefault": false,
+          "handlesNull": false,
+          "expectedAnswer": "AGENDADO"
+        },
+        {
+          "id": "flow-q-perdido",
+          "name": "Perdido",
+          "description": "",
+          "targetNodeId": "RECUPERAR",
+          "isDefault": false,
+          "handlesNull": false,
+          "expectedAnswer": "PERDIDO"
+        },
+        {
+          "id": "flow-q-humano",
+          "name": "Humano / outro",
+          "description": "",
+          "targetNodeId": "ATENDIMENTO_HUMANO",
+          "isDefault": true,
+          "handlesNull": true,
+          "expectedAnswer": "HUMANO"
+        }
+      ],
+      "extensionProperties": {},
+      "layout": {
+        "x": 850,
+        "y": 60
+      },
+      "providerType": "VARIABLE",
+      "providerVariable": "resultado",
+      "defaultFlow": "flow-q-humano"
+    },
+    "RECUPERAR": {
+      "id": "RECUPERAR",
+      "name": "Recuperar lead (agente)",
+      "type": "AGENT_TASK",
+      "description": "Missão do agente de recuperação: retomar leads perdidos ou que pararam de responder.",
+      "commitBefore": true,
+      "commitAfter": false,
+      "outgoing": [
+        {
+          "id": "flow-recuperar",
+          "name": "",
+          "description": "",
+          "targetNodeId": "GW_RECUPERACAO",
+          "isDefault": false,
+          "handlesNull": false,
+          "expectedAnswer": null
+        }
+      ],
+      "extensionProperties": {
+        "kikwi:prompt": "Este lead conversou com a pré-venda e não agendou (motivo registrado: {{motivoPerda}}). Dados já coletados: {{veiculoMarca}} {{veiculoModelo}} {{veiculoAno}}, expectativa {{expectativaPreco}}.\n\nObjetivo: retomar o contato com respeito e tentar **agendar a visita**. Adapte a abordagem ao motivo: preço -> explique que a avaliação presencial costuma valorizar o carro e não tem compromisso; sem resposta -> retome de forma leve; vendeu em outro lugar ou não é o dono -> agradeça e conclua PERDIDO sem insistir.\n\nNunca insista mais de duas vezes. Conclua AGENDADO, PERDIDO ou HUMANO."
+      },
+      "layout": {
+        "x": 850,
+        "y": 360
+      },
+      "topic": "kikwi.agents",
+      "agentRef": {
+        "key": "recuperacao",
+        "version": null
+      },
+      "tools": [
+        "consultar_fipe",
+        "consultar_horarios",
+        "agendar_visita"
+      ],
+      "limits": {
+        "maxTurns": 30,
+        "ttl": "P5D"
+      },
+      "boundaryEventIds": [
+        "RECUPERACAO_EXPIRADA",
+        "HUMANO_ASSUMIU_RECUPERACAO"
+      ],
+      "variableBindings": {
+        "inputs": [
+          {
+            "variable": "conversationId",
+            "required": true
+          },
+          {
+            "variable": "leadNome",
+            "required": false
+          },
+          {
+            "variable": "motivoPerda",
+            "required": false
+          },
+          {
+            "variable": "veiculoMarca",
+            "required": false
+          },
+          {
+            "variable": "veiculoModelo",
+            "required": false
+          },
+          {
+            "variable": "veiculoAno",
+            "required": false
+          },
+          {
+            "variable": "expectativaPreco",
+            "required": false
+          }
+        ],
+        "outputs": [
+          {
+            "variable": "resultado",
+            "required": true
+          },
+          {
+            "variable": "motivoPerda",
+            "required": false
+          },
+          {
+            "variable": "dataAgendamento",
+            "required": false
+          },
+          {
+            "variable": "agenciaId",
+            "required": false
+          }
+        ]
+      }
+    },
+    "RECUPERACAO_EXPIRADA": {
+      "id": "RECUPERACAO_EXPIRADA",
+      "name": "Sem retorno em 3 dias",
+      "type": "BOUNDARY_INTERRUPTIVE_TIMER",
+      "description": "A recuperação não teve sucesso no prazo: o lead é registrado como perdido.",
+      "commitBefore": false,
+      "commitAfter": false,
+      "outgoing": [
+        {
+          "id": "flow-recuperacao-expirada",
+          "name": "",
+          "description": "",
+          "targetNodeId": "REGISTRAR_PERDA",
+          "isDefault": false,
+          "handlesNull": false,
+          "expectedAnswer": null
+        }
+      ],
+      "extensionProperties": {},
+      "layout": {
+        "x": 850,
+        "y": 620
+      },
+      "attachedToRef": "RECUPERAR",
+      "providerType": "STATIC",
+      "staticValue": "P3D"
+    },
+    "HUMANO_ASSUMIU_RECUPERACAO": {
+      "id": "HUMANO_ASSUMIU_RECUPERACAO",
+      "name": "Humano assumiu",
+      "type": "BOUNDARY_INTERRUPTIVE_CATCH_EVENT",
+      "description": "Um consultor assumiu a conversa no painel; a plataforma correlaciona humano-assumiu:<conversationId> e a missão é cancelada.",
+      "commitBefore": false,
+      "commitAfter": false,
+      "outgoing": [
+        {
+          "id": "flow-humano-assumiu-recuperacao",
+          "name": "",
+          "description": "",
+          "targetNodeId": "ATENDIMENTO_HUMANO",
+          "isDefault": false,
+          "handlesNull": false,
+          "expectedAnswer": null
+        }
+      ],
+      "extensionProperties": {},
+      "layout": {
+        "x": 850,
+        "y": 660
+      },
+      "attachedToRef": "RECUPERAR",
+      "providerType": "TEMPLATE",
+      "correlationTemplates": [
+        {
+          "keySegments": [
+            {
+              "type": "LITERAL",
+              "value": "humano-assumiu:"
+            },
+            {
+              "type": "VARIABLE",
+              "value": "conversationId"
+            }
+          ],
+          "displayNameSegments": [
+            {
+              "type": "LITERAL",
+              "value": "Consultor assumiu a conversa"
+            }
+          ]
+        }
+      ]
+    },
+    "GW_RECUPERACAO": {
+      "id": "GW_RECUPERACAO",
+      "name": "Como terminou a recuperação?",
+      "type": "EXCLUSIVE_GATEWAY",
+      "description": "Roteia pela saída validada do agente de recuperação.",
+      "commitBefore": false,
+      "commitAfter": false,
+      "outgoing": [
+        {
+          "id": "flow-r-agendado",
+          "name": "Agendado",
+          "description": "",
+          "targetNodeId": "CRIAR_NEGOCIO_CRM",
+          "isDefault": false,
+          "handlesNull": false,
+          "expectedAnswer": "AGENDADO"
+        },
+        {
+          "id": "flow-r-humano",
+          "name": "Humano",
+          "description": "",
+          "targetNodeId": "ATENDIMENTO_HUMANO",
+          "isDefault": false,
+          "handlesNull": false,
+          "expectedAnswer": "HUMANO"
+        },
+        {
+          "id": "flow-r-perdido",
+          "name": "Perdido",
+          "description": "",
+          "targetNodeId": "REGISTRAR_PERDA",
+          "isDefault": true,
+          "handlesNull": true,
+          "expectedAnswer": null
+        }
+      ],
+      "extensionProperties": {},
+      "layout": {
+        "x": 1350,
+        "y": 420
+      },
+      "providerType": "VARIABLE",
+      "providerVariable": "resultado",
+      "defaultFlow": "flow-r-perdido"
+    },
+    "ATENDIMENTO_HUMANO": {
+      "id": "ATENDIMENTO_HUMANO",
+      "name": "Atendimento por consultor",
+      "type": "EXTERNAL_TASK",
+      "description": "Um consultor humano conduz a conversa (escalação do agente ou assumida no painel) e informa o resultado.",
+      "commitBefore": true,
+      "commitAfter": false,
+      "outgoing": [
+        {
+          "id": "flow-atendimento",
+          "name": "",
+          "description": "",
+          "targetNodeId": "GW_ATENDIMENTO",
+          "isDefault": false,
+          "handlesNull": false,
+          "expectedAnswer": null
+        }
+      ],
+      "extensionProperties": {},
+      "layout": {
+        "x": 850,
+        "y": 760
+      },
+      "variableBindings": {
+        "inputs": [
+          {
+            "variable": "resultado",
+            "required": true
+          },
+          {
+            "variable": "motivoPerda",
+            "required": false
+          },
+          {
+            "variable": "dataAgendamento",
+            "required": false
+          },
+          {
+            "variable": "agenciaId",
+            "required": false
+          }
+        ],
+        "outputs": []
+      }
+    },
+    "GW_ATENDIMENTO": {
+      "id": "GW_ATENDIMENTO",
+      "name": "Consultor agendou?",
+      "type": "EXCLUSIVE_GATEWAY",
+      "description": "Resultado informado pelo consultor.",
+      "commitBefore": false,
+      "commitAfter": false,
+      "outgoing": [
+        {
+          "id": "flow-h-agendado",
+          "name": "Agendado",
+          "description": "",
+          "targetNodeId": "CRIAR_NEGOCIO_CRM",
+          "isDefault": false,
+          "handlesNull": false,
+          "expectedAnswer": "AGENDADO"
+        },
+        {
+          "id": "flow-h-perdido",
+          "name": "Não agendou",
+          "description": "",
+          "targetNodeId": "REGISTRAR_PERDA",
+          "isDefault": true,
+          "handlesNull": true,
+          "expectedAnswer": null
+        }
+      ],
+      "extensionProperties": {},
+      "layout": {
+        "x": 1350,
+        "y": 820
+      },
+      "providerType": "VARIABLE",
+      "providerVariable": "resultado",
+      "defaultFlow": "flow-h-perdido"
+    },
+    "CRIAR_NEGOCIO_CRM": {
+      "id": "CRIAR_NEGOCIO_CRM",
+      "name": "Criar negócio no CRM",
+      "type": "EXECUTABLE_TASK",
+      "description": "Cria o negócio no CRM do cliente já na etapa Agendado, com dados do veículo, fotos e data da visita.",
+      "commitBefore": true,
+      "commitAfter": false,
+      "outgoing": [
+        {
+          "id": "flow-crm",
+          "name": "",
+          "description": "",
+          "targetNodeId": "FIM_AGENDADO",
+          "isDefault": false,
+          "handlesNull": false,
+          "expectedAnswer": null
+        }
+      ],
+      "extensionProperties": {},
+      "layout": {
+        "x": 1750,
+        "y": 0
+      },
+      "executor": "criarNegocioCrm",
+      "retryPolicy": {
+        "strategy": "EXPONENTIAL_BACKOFF",
+        "maxRetries": 5,
+        "initialInterval": "PT10S",
+        "multiplier": 2.0,
+        "maxInterval": "PT10M",
+        "intervals": []
+      },
+      "variableBindings": {
+        "inputs": [],
+        "outputs": [
+          {
+            "variable": "negocioCrmId",
+            "required": true
+          }
+        ]
+      }
+    },
+    "FIM_AGENDADO": {
+      "id": "FIM_AGENDADO",
+      "name": "Visita agendada",
+      "type": "DEFAULT_END_EVENT",
+      "description": "Lead entregue ao processo comercial com visita marcada.",
+      "commitBefore": false,
+      "commitAfter": false,
+      "outgoing": [],
+      "extensionProperties": {},
+      "layout": {
+        "x": 2250,
+        "y": 40
+      }
+    },
+    "REGISTRAR_PERDA": {
+      "id": "REGISTRAR_PERDA",
+      "name": "Registrar perda",
+      "type": "EXECUTABLE_TASK",
+      "description": "Registra o lead perdido (motivo, dados coletados) para relatórios e futuras campanhas. Sem motivo informado, usa SEM_RESPOSTA.",
+      "commitBefore": true,
+      "commitAfter": false,
+      "outgoing": [
+        {
+          "id": "flow-perda",
+          "name": "",
+          "description": "",
+          "targetNodeId": "FIM_PERDIDO",
+          "isDefault": false,
+          "handlesNull": false,
+          "expectedAnswer": null
+        }
+      ],
+      "extensionProperties": {},
+      "layout": {
+        "x": 1750,
+        "y": 420
+      },
+      "executor": "registrarPerda"
+    },
+    "FIM_PERDIDO": {
+      "id": "FIM_PERDIDO",
+      "name": "Lead perdido",
+      "type": "DEFAULT_END_EVENT",
+      "description": "Pré-venda encerrada sem agendamento.",
+      "commitBefore": false,
+      "commitAfter": false,
+      "outgoing": [],
+      "extensionProperties": {},
+      "layout": {
+        "x": 2250,
+        "y": 460
+      }
+    }
+  }
+}

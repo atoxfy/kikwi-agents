@@ -1,0 +1,8 @@
+target/
+node_modules/
+dist/
+.idea/
+*.iml
+.vscode/
+application-local.yaml
+.env*

@@ -1,0 +1,66 @@
+server:
+  port: ${SERVER_PORT:8090}
+spring:
+  application:
+    name: kikwi-agents
+  threads:
+    virtual:
+      enabled: true
+  servlet:
+    multipart:
+      max-file-size: 15MB
+      max-request-size: 16MB
+  data:
+    mongodb:
+      uri: ${MONGODB_URI:mongodb://localhost:27017/?directConnection=true}
+      database: kikwi_agents_db
+
+kikwi-agents:
+  anthropic:
+    api-key: ${ANTHROPIC_API_KEY:}
+  gemini:
+    api-key: ${GEMINI_API_KEY:}
+  dms:
+    enabled: ${DMS_ENABLED:false}
+    base-url: ${DMS_BASE_URL:http://localhost:8082}
+    category: ${DMS_CATEGORY:lead:anexo-conversa}
+    token: ${DMS_TOKEN:}
+  worker:
+    worker-id: ${WORKER_ID:}
+    topics: kikwi.agents
+    max-tasks: 10
+    lease-duration: PT10M
+    poll-interval: PT5S
+    renew-interval: PT2M
+    transcript-window: 40
+    failure-retries: 2
+    failure-retry-delay: PT1M
+    handoff-message: "Vou chamar uma pessoa do nosso time para continuar com você. Já já alguém responde por aqui."
+  storage:
+    # mongo: conversas, transcrição e anexos (GridFS) sobrevivem a reinícios; memory só para testes
+    store: ${AGENT_STORAGE:mongo}
+  catalog:
+    # mongo (agent_definitions) ou memory
+    store: ${AGENT_CATALOG_STORE:mongo}
+  # Dublês de criarNegocioCrm/registrarPerda até existir a integração real do cliente. Desligue em qualquer ambiente real.
+  sample-stubs:
+    enabled: ${SAMPLE_STUBS:true}
+  demo:
+    tenant-id: loja-exemplo
+
+kikwiflow:
+  process-definition:
+    auto-deploy:
+      # processes/*.kikwi da raiz do repositório entram no classpath pelo build do agents-app.
+      enabled: true
+  outbox:
+    events-enabled: true
+  history:
+    explorer:
+      enabled: true
+  monitor-ui:
+    enabled: true
+    require-auth: false
+  rest:
+    cors:
+      allowed-origins: ${FRONT_ORIGINS:http://localhost:5173}
