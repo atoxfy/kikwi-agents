@@ -27,6 +27,7 @@
     </parent>
 
     <artifactId>agents-app</artifactId>
+    <name>Kikwi Agents :: App</name>
     <description>Aplicação Spring Boot que embute o motor Kikwiflow e monta a plataforma.</description>
 
     <dependencies>

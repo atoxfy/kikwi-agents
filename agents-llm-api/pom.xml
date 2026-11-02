@@ -27,6 +27,7 @@
     </parent>
 
     <artifactId>agents-llm-api</artifactId>
+    <name>Kikwi Agents :: Llm Api</name>
     <description>Porta agnóstica de provedor de LLM (mensagens, ferramentas, saída estruturada, uso).</description>
 
     <dependencies>

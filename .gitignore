@@ -6,3 +6,4 @@ dist/
 .vscode/
 application-local.yaml
 .env*
+.flattened-pom.xml

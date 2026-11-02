@@ -27,6 +27,7 @@
     </parent>
 
     <artifactId>agents-llm-anthropic</artifactId>
+    <name>Kikwi Agents :: Llm Anthropic</name>
     <description>Adapter da porta LlmClient para a Messages API da Anthropic (HTTP puro + Jackson).</description>
 
     <dependencies>

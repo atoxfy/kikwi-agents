@@ -27,6 +27,7 @@
     </parent>
 
     <artifactId>agents-runtime</artifactId>
+    <name>Kikwi Agents :: Runtime</name>
     <description>Runtime de agentes: missões, loop agente-LLM, registro de ferramentas e auditoria.</description>
 
     <dependencies>

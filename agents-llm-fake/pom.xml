@@ -27,6 +27,7 @@
     </parent>
 
     <artifactId>agents-llm-fake</artifactId>
+    <name>Kikwi Agents :: Llm Fake</name>
     <description>LlmClient roteirizado para testes e demos sem chave de API.</description>
 
     <dependencies>

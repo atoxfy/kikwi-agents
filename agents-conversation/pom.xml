@@ -27,6 +27,7 @@
     </parent>
 
     <artifactId>agents-conversation</artifactId>
+    <name>Kikwi Agents :: Conversation</name>
     <description>Inbox, transcrição, single-writer por conversa e roteamento de mensagens.</description>
 
     <dependencies>

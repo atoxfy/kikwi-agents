@@ -27,6 +27,7 @@
     </parent>
 
     <artifactId>agents-model</artifactId>
+    <name>Kikwi Agents :: Model</name>
     <description>Modelo de domínio puro: tenants, canais, conversas, agentes, ferramentas e missões.</description>
 
     <dependencies>

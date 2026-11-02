@@ -27,6 +27,7 @@
     </parent>
 
     <artifactId>agents-llm-gemini</artifactId>
+    <name>Kikwi Agents :: Llm Gemini</name>
     <description>Adapter da porta LlmClient para a API Gemini do Google (generateContent; HTTP puro + Jackson).</description>
 
     <dependencies>

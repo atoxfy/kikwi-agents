@@ -27,6 +27,7 @@
     </parent>
 
     <artifactId>agents-channels-api</artifactId>
+    <name>Kikwi Agents :: Channels Api</name>
     <description>Porta de canais: mensagem de entrada normalizada e envio por canal.</description>
 
     <dependencies>

@@ -27,6 +27,7 @@
     </parent>
 
     <artifactId>agents-dms-client</artifactId>
+    <name>Kikwi Agents :: Dms Client</name>
     <description>Cliente do DMS para guardar fotos e documentos por claim check (dms://).</description>
 
     <dependencies>
