@@ -29,7 +29,7 @@
 
     <groupId>io.kikwiflow.agents</groupId>
     <artifactId>kikwi-agents-parent</artifactId>
-    <version>0.1.1</version>
+    <version>0.1.2</version>
     <packaging>pom</packaging>
     <name>Kikwi Agents</name>
     <description>Plataforma de agentes conversacionais multi-tenant orquestrada e auditada pelo Kikwiflow.</description>
@@ -57,7 +57,7 @@
 
     <properties>
         <java.version>21</java.version>
-        <kikwiflow.version>0.1.81</kikwiflow.version>
+        <kikwiflow.version>0.1.82</kikwiflow.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 

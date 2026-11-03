@@ -43,7 +43,7 @@ Canais (site, WhatsApp) e o cadastro de tenants ficam no produto que usa o start
 <dependency>
   <groupId>io.kikwiflow.agents</groupId>
   <artifactId>agents-spring-boot-starter</artifactId>
-  <version>0.1.1</version>
+  <version>0.1.2</version>
 </dependency>
 ```
 
