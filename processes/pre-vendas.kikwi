@@ -41,7 +41,7 @@
       "format": "SHORT_TEXT"
     },
     {
-      "key": "leadNome",
+      "key": "contatoNome",
       "label": "Nome do lead",
       "format": "SHORT_TEXT"
     },
@@ -197,7 +197,7 @@
             "required": false
           },
           {
-            "variable": "leadNome",
+            "variable": "contatoNome",
             "required": false
           }
         ],
@@ -223,7 +223,7 @@
         }
       ],
       "extensionProperties": {
-        "kikwi:prompt": "Este lead chegou pelo {{canal}} (origem: {{origem}}) querendo vender um veículo. Nome informado: {{leadNome}}.\n\nObjetivo: entender o veículo e a intenção de venda e **agendar uma visita** a uma agência para avaliação presencial.\n\nColete, de forma natural e sem parecer formulário: marca, modelo, ano, km, placa e a expectativa de preço. Peça de 3 a 6 fotos (frente, traseira, laterais, painel com km, interior) com solicitar_midia. Use consultar_fipe para dar uma referência honesta e consultar_horarios / agendar_visita para marcar a visita na agência mais próxima.\n\nConclua com resultado AGENDADO quando a visita estiver marcada; PERDIDO se o lead desistir, não for o dono ou a expectativa for incompatível depois de você tentar contornar; HUMANO se o lead pedir uma pessoa ou houver situação fora do seu alcance.",
+        "kikwi:prompt": "Este lead chegou pelo {{canal}} (origem: {{origem}}) querendo vender um veículo. Nome informado: {{contatoNome}}.\n\nObjetivo: entender o veículo e a intenção de venda e **agendar uma visita** a uma agência para avaliação presencial.\n\nColete, de forma natural e sem parecer formulário: marca, modelo, ano, km, placa e a expectativa de preço. Peça de 3 a 6 fotos (frente, traseira, laterais, painel com km, interior) com solicitar_midia. Use consultar_fipe para dar uma referência honesta e consultar_horarios / agendar_visita para marcar a visita na agência mais próxima.\n\nConclua com resultado AGENDADO quando a visita estiver marcada; PERDIDO se o lead desistir, não for o dono ou a expectativa for incompatível depois de você tentar contornar; HUMANO se o lead pedir uma pessoa ou houver situação fora do seu alcance.",
         "kikwi:documentation": "Agente inicial. Persona e regras gerais ficam no perfil pre-vendas da plataforma; aqui só o objetivo desta etapa."
       },
       "layout": {
@@ -264,7 +264,7 @@
             "required": false
           },
           {
-            "variable": "leadNome",
+            "variable": "contatoNome",
             "required": false
           }
         ],
@@ -484,7 +484,7 @@
             "required": true
           },
           {
-            "variable": "leadNome",
+            "variable": "contatoNome",
             "required": false
           },
           {

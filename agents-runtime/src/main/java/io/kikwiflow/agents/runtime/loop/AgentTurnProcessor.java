@@ -90,6 +90,11 @@ public class AgentTurnProcessor {
     public static final String TASK_NUDGE = "Ninguém vai ler esta resposta: esta missão é uma tarefa sem interlocutor. "
             + "Continue com as ferramentas e conclua com " + BuiltinTools.CONCLUIR_MISSAO + ", ou chame "
             + BuiltinTools.ESCALAR_HUMANO + " se precisar de uma pessoa.";
+    /** Quando o modelo devolve um turno vazio (sem texto e sem ferramenta) numa conversa: o contato ficaria sem resposta. */
+    static final String EMPTY_REPLY_NUDGE = "Sua resposta veio vazia e o contato está esperando. Responda agora ao contato, "
+            + "em texto, ou use as ferramentas.";
+    private static final java.time.format.DateTimeFormatter NOW = java.time.format.DateTimeFormatter
+            .ofPattern("EEEE, dd/MM/yyyy, HH:mm", java.util.Locale.forLanguageTag("pt-BR"));
     /** Imagens/PDFs entregues ao modelo por turno (os mais recentes); os demais ficam só como referência. */
     static final int MAX_MEDIA = 8;
     /** Limite por arquivo dos provedores para imagem inline. */
@@ -193,8 +198,12 @@ public class AgentTurnProcessor {
                         "properties", Map.of("motivo", Map.of("type", "string")),
                         "required", List.of("motivo"))));
 
-        String system = SystemPromptAssembler.assemble(agent, mission);
+        // A data e a hora vão a cada turno, fora do prompt versionado (o hash da missão continua estável): sem isso o
+        // modelo não sabe o que é "hoje", "amanhã" ou "sábado". O fuso é o do Clock do runtime.
+        String system = SystemPromptAssembler.assemble(agent, mission) + "\n\nData e hora agora: "
+                + NOW.format(clock.instant().atZone(clock.getZone())) + " (" + clock.getZone().getId() + ").";
         LlmUsage usage = LlmUsage.zero();
+        boolean nudged = false;
         ToolContext context = new ToolContext(mission, conversation);
         // O que o modelo escreve junto de uma chamada de ferramenta também é para o lead (ex.: "Combinado!" ao
         // agendar): acumula no turno e sai junto da resposta final ou da despedida.
@@ -211,6 +220,13 @@ public class AgentTurnProcessor {
             }
             List<LlmContent.ToolCall> calls = response.toolCalls();
             if (calls.isEmpty()) {
+                if (!task && said.isEmpty() && !nudged) {
+                    // Há modelos que, às vezes, devolvem nada: insiste uma vez antes de deixar o contato sem resposta.
+                    nudged = true;
+                    log.warn("Missão {}: o modelo devolveu um turno vazio; pedindo a resposta de novo", mission.taskId());
+                    messages.add(new LlmMessage(LlmMessage.Role.USER, List.of(new LlmContent.Text(EMPTY_REPLY_NUDGE))));
+                    continue;
+                }
                 return new TurnOutcome.Reply(String.join("\n\n", said), usage);
             }
 

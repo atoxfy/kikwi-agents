@@ -367,6 +367,10 @@ public class MissionWorker {
 
         switch (outcome) {
             case TurnOutcome.Reply reply -> {
+                if (reply.text() == null || reply.text().isBlank()) {
+                    log.warn("Missão {}: o agente não respondeu ao contato na conversa {} (turno vazio)",
+                            mission.taskId(), conversation.id());
+                }
                 send(mission, conversation, reply.text());
                 source.extendLock(mission.taskId(), settings.workerId(), settings.leaseDuration());
             }

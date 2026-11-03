@@ -120,6 +120,41 @@ class AgentTurnProcessorTest {
     }
 
     @Test
+    @DisplayName("Dado o modelo devolve um turno vazio, quando é conversa, então insiste uma vez e entrega a resposta")
+    void insisteNoTurnoVazio() {
+        llm.thenReply("").thenReply("Pode ser sábado às 11h, sim!");
+
+        TurnOutcome outcome = processor.processTurn(mission, profile, conversation, List.of(fromLead("E sábado?")));
+
+        assertThat(outcome).isInstanceOfSatisfying(TurnOutcome.Reply.class,
+                r -> assertThat(r.text()).isEqualTo("Pode ser sábado às 11h, sim!"));
+        assertThat(llm.received()).hasSize(2);
+        assertThat(llm.received().get(1).messages().getLast().content().getFirst())
+                .isEqualTo(new LlmContent.Text(AgentTurnProcessor.EMPTY_REPLY_NUDGE));
+    }
+
+    @Test
+    @DisplayName("Dado o modelo insiste no vazio, quando já pediu de novo uma vez, então devolve Reply vazio sem loop")
+    void naoInsisteParaSempre() {
+        llm.thenReply("").thenReply("");
+
+        TurnOutcome outcome = processor.processTurn(mission, profile, conversation, List.of(fromLead("E sábado?")));
+
+        assertThat(outcome).isInstanceOfSatisfying(TurnOutcome.Reply.class, r -> assertThat(r.text()).isBlank());
+        assertThat(llm.received()).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("Dado qualquer turno, quando monta o pedido, então o modelo sabe a data, a hora e o dia da semana")
+    void sabeQueDiaEHoje() {
+        llm.thenReply("Oi!");
+
+        processor.processTurn(mission, profile, conversation, List.of(fromLead("Oi")));
+
+        assertThat(llm.received().get(0).system()).contains("Data e hora agora: domingo, 25/10/2026, 12:00 (Z).");
+    }
+
+    @Test
     @DisplayName("Dado o lead pergunta algo, quando o modelo só responde, então devolve Reply com o texto")
     void respondeTexto() {
         llm.thenReply("Oi Maria! Qual o modelo e ano do carro?");
