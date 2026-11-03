@@ -189,13 +189,13 @@ public class ConversationService implements InboundMessageHandler {
             Conversation conversation = previous.get();
             String from = conversation.channel() == null ? "outro canal" : labelOf(conversation.channel().type().name());
             conversation = conversations.save(conversation.withChannel(channel.ref()));
-            messages.append(note(conversation, "O lead passou a falar pelo " + channel.label() + " (antes: " + from
+            messages.append(note(conversation, "O contato passou a falar pelo " + channel.label() + " (antes: " + from
                     + ") e quis continuar esta conversa. As respostas agora vão pelo " + channel.label() + ".",
                     answer.receivedAt()));
             return deliver(conversation, contact, channel, pending.parts(), pending.receivedAt(),
                     pending.channelMessageId(), false);
         }
-        previous.ifPresent(p -> messages.append(note(p, "O lead abriu outro assunto pelo " + channel.label()
+        previous.ifPresent(p -> messages.append(note(p, "O contato abriu outro assunto pelo " + channel.label()
                 + "; esta conversa continua aberta.", answer.receivedAt())));
         return deliver(newConversation(pending.tenantId(), contact, channel, pending.receivedAt()), contact, channel,
                 pending.parts(), pending.receivedAt(), pending.channelMessageId(), true);
@@ -241,7 +241,7 @@ public class ConversationService implements InboundMessageHandler {
             variables.put("conversationId", conversation.id());
             variables.put("canal", channel.ref().type().name());
             if (contact.displayName() != null) {
-                variables.put("leadNome", contact.displayName());
+                variables.put("contatoNome", contact.displayName());
             }
             return new RouteDecision.StartProcess(conversation, channel.entry().processKey(), variables, message);
         }

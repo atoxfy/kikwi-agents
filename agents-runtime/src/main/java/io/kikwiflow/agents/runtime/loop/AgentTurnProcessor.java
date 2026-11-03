@@ -79,8 +79,8 @@ public class AgentTurnProcessor {
     private static final Logger log = LoggerFactory.getLogger(AgentTurnProcessor.class);
     private static final int MAX_TOKENS = 1024;
     /** Resultado do concluir_missao quando o modelo concluiu sem escrever nada ao lead. */
-    static final String CLOSING_REQUEST = "Missão concluída e registrada. Escreva agora a sua última mensagem ao lead, "
-            + "em texto: confirme o combinado (no agendamento: dia, hora e endereço) ou despeça-se com cordialidade. "
+    static final String CLOSING_REQUEST = "Missão concluída e registrada. Escreva agora a sua última mensagem ao contato, "
+            + "em texto: confirme o que ficou combinado (datas, horários, locais, próximos passos) ou despeça-se com cordialidade. "
             + "Não chame ferramentas.";
     /** Imagens/PDFs entregues ao modelo por turno (os mais recentes); os demais ficam só como referência. */
     static final int MAX_MEDIA = 8;
@@ -206,7 +206,7 @@ public class AgentTurnProcessor {
                         }
                         results.add(new LlmContent.ToolResult(call.id(),
                                 "Faltam campos obrigatórios: " + String.join(", ", missing)
-                                        + ". Pergunte ao lead antes de concluir.", true));
+                                        + ". Pergunte ao contato antes de concluir.", true));
                     }
                     case BuiltinTools.ESCALAR_HUMANO -> {
                         Object motivo = call.input().get("motivo");
@@ -229,7 +229,7 @@ public class AgentTurnProcessor {
             return text == null ? "" : text.strip();
         } catch (RuntimeException e) {
             // A conclusão já valeu: sem despedida, o lead só não recebe a última mensagem.
-            log.warn("Missão {} concluída sem mensagem final ao lead: {}", mission.taskId(), e.getMessage());
+            log.warn("Missão {} concluída sem mensagem final ao contato: {}", mission.taskId(), e.getMessage());
             return "";
         }
     }

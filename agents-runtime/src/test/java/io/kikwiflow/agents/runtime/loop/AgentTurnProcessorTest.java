@@ -77,8 +77,8 @@ class AgentTurnProcessorTest {
 
     private final Mission mission = new Mission("task-1", "pi-1", "loja-exemplo", "conv-1", "pre-vendas", null,
             List.of("consultar_fipe", "agendar_visita"),
-            "Qualifique o veículo de {{leadNome}} e agende uma visita.", contract, MissionLimits.none(),
-            Map.of("leadNome", "Maria"), NOW.plusSeconds(300), NOW, null);
+            "Qualifique o veículo de {{contatoNome}} e agende uma visita.", contract, MissionLimits.none(),
+            Map.of("contatoNome", "Maria"), NOW.plusSeconds(300), NOW, null);
 
     private final AgentDefinition profile = new AgentDefinition("pre-vendas", 3, AgentStatus.PUBLISHED,
             "loja-exemplo", "Pré-vendas", null,
@@ -133,9 +133,9 @@ class AgentTurnProcessorTest {
                 .contains("agende uma visita")
                 .contains("escalar_humano imediatamente se: pedido de humano")
                 // A variável do processo não entra na instrução: vira referência e vai para o bloco de dados.
-                .contains("Qualifique o veículo de «leadNome»")
+                .contains("Qualifique o veículo de «contatoNome»")
                 .contains("## Dados do atendimento")
-                .contains("- leadNome: Maria");
+                .contains("- contatoNome: Maria");
     }
 
     @Test

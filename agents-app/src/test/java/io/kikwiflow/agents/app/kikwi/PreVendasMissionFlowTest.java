@@ -184,8 +184,8 @@ class PreVendasMissionFlowTest {
         // Instruções do agente com os parâmetros da versão; o nome do lead vem como dado, fora da instrução.
         assertThat(llm.received().get(0).system())
                 .contains("Você é Ana, consultora da Loja Exemplo")
-                .contains("Nome informado: «leadNome»")
-                .contains("- leadNome: Maria");
+                .contains("Nome informado: «contatoNome»")
+                .contains("- contatoNome: Maria");
 
         llm.thenCallTool(BuiltinTools.CONCLUIR_MISSAO, Map.of(
                         "resultado", "AGENDADO",
@@ -266,8 +266,10 @@ class PreVendasMissionFlowTest {
         assertThat(((Map<?, ?>) toolSeen.inputSchema().get("properties")).containsKey("conversationId")).isFalse();
 
         // O resultado devolvido ao modelo é só o retorno do processo.
-        String toolResult = llm.received().getLast().messages().getLast().content().stream()
+        // (a última chamada pode ser o pedido da despedida, quando o modelo conclui sem escrever)
+        String toolResult = llm.received().stream().flatMap(r -> r.messages().getLast().content().stream())
                 .filter(LlmContent.ToolResult.class::isInstance).map(c -> ((LlmContent.ToolResult) c).content())
+                .filter(c -> c.contains("CONCLUIDO"))
                 .findFirst().orElseThrow();
         assertThat(toolResult).contains("CONCLUIDO").contains("AG-1").doesNotContain("agenciaId");
 

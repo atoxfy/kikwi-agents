@@ -119,7 +119,7 @@ class MissionWorkerTest {
 
     private Mission mission(String taskId, String agentKey, MissionLimits limits, Integer retries) {
         return new Mission(taskId, "pi-1", "loja-exemplo", "conv-1", agentKey, null, List.of(),
-                "Agende uma visita para {{leadNome}}.", contract, limits, Map.of("leadNome", "Maria"),
+                "Agende uma visita para {{contatoNome}}.", contract, limits, Map.of("contatoNome", "Maria"),
                 NOW.plusSeconds(600), NOW.minusSeconds(60), retries);
     }
 

@@ -233,7 +233,7 @@ public class MissionWorker {
             if (transcript.isEmpty() || transcript.getLast().author().type() == MessageAuthor.Type.AGENT) {
                 // Sem fala nova do lead (missão de recuperação, ou retomada): o agente puxa a conversa. A nota não vai
                 // para a transcrição, só para este pedido ao LLM.
-                transcript.add(systemNote(conversation, "Retome a conversa com o lead conforme o objetivo da missão."));
+                transcript.add(systemNote(conversation, "Retome a conversa com o contato conforme o objetivo da missão."));
             }
             handle(mission, conversation, transcript, 0);
         } catch (MissionLeaseLostException e) {
@@ -270,7 +270,7 @@ public class MissionWorker {
                     }
                     // A nota fica na transcrição: numa retomada o agente ainda sabe por que não concluiu.
                     Message note = messages.append(systemNote(conversation, "O sistema recusou a conclusão: "
-                            + String.join("; ", e.problems()) + ". Resolva com o lead e só então conclua de novo."));
+                            + String.join("; ", e.problems()) + ". Resolva com o contato e só então conclua de novo."));
                     transcript.add(note);
                     handle(mission, conversation, transcript, rejections + 1);
                     return;
@@ -304,7 +304,7 @@ public class MissionWorker {
     private void optOut(ActiveMission mission) {
         try {
             source.throwBusinessError(mission.taskId(), settings.workerId(), OPT_OUT_ERROR_CODE,
-                    "O lead pediu para não receber mais mensagens", Map.of());
+                    "O contato pediu para não receber mais mensagens", Map.of());
         } catch (MissionLeaseLostException e) {
             log.info("Missão {} já tinha sido interrompida no opt-out", mission.taskId());
         }

@@ -96,7 +96,7 @@ class ConversationServiceTest {
                 assertThat(start.variables())
                         .containsEntry("origem", "site")
                         .containsEntry("canal", "WEBCHAT")
-                        .containsEntry("leadNome", "Maria")
+                        .containsEntry("contatoNome", "Maria")
                         .containsEntry("conversationId", start.conversation().id());
                 assertThat(start.conversation().channel()).isEqualTo(SITE.ref());
                 assertThat(start.conversation().contactId()).isEqualTo(LEAD);

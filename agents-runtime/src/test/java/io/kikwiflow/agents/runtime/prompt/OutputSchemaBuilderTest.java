@@ -52,8 +52,8 @@ class OutputSchemaBuilderTest {
     @Test
     @DisplayName("Dado placeholders, quando renderiza, então substitui valores e marca ausentes sem interpretar expressões")
     void renderizaPrompt() {
-        String rendered = PromptRenderer.render("Lead {{ leadNome }} quer vender {{veiculo}}; {{a + b}}",
-                Map.of("leadNome", "Maria"));
+        String rendered = PromptRenderer.render("Lead {{ contatoNome }} quer vender {{veiculo}}; {{a + b}}",
+                Map.of("contatoNome", "Maria"));
 
         assertThat(rendered).isEqualTo("Lead Maria quer vender (não informado); {{a + b}}");
     }

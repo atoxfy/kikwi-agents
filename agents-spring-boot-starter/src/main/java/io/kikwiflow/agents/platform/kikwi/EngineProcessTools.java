@@ -138,7 +138,7 @@ public class EngineProcessTools implements ProcessToolDescriber, BindingExecutor
                             + (error.message() != null ? " (" + error.message() + ")" : ""))
                     .toList();
             return ToolResult.error("Entradas recusadas: " + String.join("; ", problems)
-                    + ". Corrija com o lead e tente de novo.");
+                    + ". Corrija com o contato e tente de novo.");
         } catch (ProcessErrorException e) {
             return ToolResult.error("O processo terminou com o erro de negócio " + e.getErrorCode()
                     + (e.getMessage() != null ? ": " + e.getMessage() : "") + ".");
