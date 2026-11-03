@@ -132,7 +132,7 @@
     <profiles>
         <!--
           Publicação no Maven Central (mesmo processo do motor):
-            mvn -Prelease clean deploy -pl '!agents-app'
+            powershell -ExecutionPolicy Bypass -File .elease.ps1   (= mvn -Prelease clean deploy -DskipTests -pl '!agents-app')
           O agents-app é só demonstração e não é publicado.
         -->
         <profile>
