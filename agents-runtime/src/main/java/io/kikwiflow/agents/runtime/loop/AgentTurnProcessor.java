@@ -155,15 +155,22 @@ public class AgentTurnProcessor {
         List<LlmMessage> messages = toLlmMessages(transcript, mediaFor(mission.tenantId(), agent, transcript));
         LlmUsage usage = LlmUsage.zero();
         ToolContext context = new ToolContext(mission, conversation);
+        // O que o modelo escreve junto de uma chamada de ferramenta também é para o lead (ex.: "Combinado!" ao
+        // agendar): acumula no turno e sai junto da resposta final ou da despedida.
+        List<String> said = new ArrayList<>();
 
         for (int iteration = 0; iteration < maxToolIterations; iteration++) {
             Integer maxTokens = agent.model().maxOutputTokens() == null ? MAX_TOKENS : agent.model().maxOutputTokens();
             LlmResponse response = client.generate(new LlmRequest(model.model(), system, messages, tools,
                     null, maxTokens, agent.model().temperature(), null));
             usage = usage.plus(response.usage());
+            String text = response.text();
+            if (text != null && !text.isBlank()) {
+                said.add(text.strip());
+            }
             List<LlmContent.ToolCall> calls = response.toolCalls();
             if (calls.isEmpty()) {
-                return new TurnOutcome.Reply(response.text(), usage);
+                return new TurnOutcome.Reply(String.join("\n\n", said), usage);
             }
 
             messages.add(new LlmMessage(LlmMessage.Role.ASSISTANT, response.content()));
@@ -173,7 +180,7 @@ public class AgentTurnProcessor {
                     case BuiltinTools.CONCLUIR_MISSAO -> {
                         List<String> missing = missingRequired(mission.outputContract(), call.input());
                         if (missing.isEmpty()) {
-                            return new TurnOutcome.Completed(call.input(), response.text(), usage);
+                            return new TurnOutcome.Completed(call.input(), String.join("\n\n", said), usage);
                         }
                         results.add(new LlmContent.ToolResult(call.id(),
                                 "Faltam campos obrigatórios: " + String.join(", ", missing)

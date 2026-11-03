@@ -205,6 +205,31 @@ class AgentTurnProcessorTest {
     }
 
     @Test
+    @DisplayName("Dado o modelo escreve ao lead junto da ferramenta e conclui depois sem texto, então a despedida é o que escreveu")
+    void despedidaEscritaJuntoDaFerramenta() {
+        llm.thenSayAndCallTool("Combinado! Te espero terça às 10h.", "consultar_fipe", Map.of("placa", "ABC1D23"))
+                .thenCallTool("concluir_missao", Map.of("resultado", "AGENDADO",
+                        "dataAgendamento", "2026-10-27T10:00:00-03:00"));
+
+        TurnOutcome outcome = processor.processTurn(mission, profile, conversation, List.of(fromLead("Pode ser")));
+
+        assertThat(outcome).isInstanceOfSatisfying(TurnOutcome.Completed.class,
+                c -> assertThat(c.farewell()).isEqualTo("Combinado! Te espero terça às 10h."));
+    }
+
+    @Test
+    @DisplayName("Dado o modelo escreve antes e depois de uma ferramenta, quando responde, então o lead recebe os dois textos")
+    void respostaJuntaTextosDoTurno() {
+        llm.thenSayAndCallTool("Deixa eu consultar.", "consultar_fipe", Map.of("placa", "ABC1D23"))
+                .thenReply("Pela FIPE, cerca de R$ 45 mil.");
+
+        TurnOutcome outcome = processor.processTurn(mission, profile, conversation, List.of(fromLead("ABC1D23")));
+
+        assertThat(outcome).isInstanceOfSatisfying(TurnOutcome.Reply.class,
+                r -> assertThat(r.text()).isEqualTo("Deixa eu consultar.\n\nPela FIPE, cerca de R$ 45 mil."));
+    }
+
+    @Test
     @DisplayName("Dado o lead pede um humano, quando o modelo escala, então devolve HandedOff e audita o handoff")
     void escala() {
         llm.thenCallTool("escalar_humano", Map.of("motivo", "lead pediu atendente"));

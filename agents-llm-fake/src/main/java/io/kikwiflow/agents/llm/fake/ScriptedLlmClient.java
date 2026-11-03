@@ -77,6 +77,14 @@ public class ScriptedLlmClient implements LlmClient {
         return this;
     }
 
+    /** Texto ao lead e chamada de ferramenta na mesma resposta, como os modelos costumam fazer. */
+    public ScriptedLlmClient thenSayAndCallTool(String text, String toolName, Map<String, Object> input) {
+        script.addLast(new LlmResponse(
+                List.of(new LlmContent.Text(text), new LlmContent.ToolCall("call_" + UUID.randomUUID(), toolName, input)),
+                LlmResponse.StopReason.TOOL_USE, new LlmUsage(10, 5), "fake"));
+        return this;
+    }
+
     public List<LlmRequest> received() {
         return List.copyOf(received);
     }
