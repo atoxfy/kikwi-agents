@@ -276,7 +276,7 @@ public class MissionWorker {
                     return;
                 }
                 release(mission);
-                send(mission, conversation, completed.farewell());
+                send(mission, conversation, completed.resolveFarewell());
             }
             case TurnOutcome.HandedOff handedOff -> handOff(mission, conversation);
             case TurnOutcome.Exhausted exhausted -> fail(mission, exhausted.reason());

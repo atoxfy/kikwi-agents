@@ -210,9 +210,13 @@ class MissionWorkerTest {
         void completes() {
             store.append(fromLead("Gol 2018, pode ser sábado às 10h"));
             llm.thenCallTool(BuiltinTools.CONCLUIR_MISSAO,
-                    Map.of("resultado", "AGENDADO", "dataAgendamento", "2026-10-31T10:00:00-03:00"));
+                    Map.of("resultado", "AGENDADO", "dataAgendamento", "2026-10-31T10:00:00-03:00"))
+                    .thenReply("Combinado! Te espero sábado às 10h.");
 
             assertThat(worker.onMessage("conv-1", "task-1")).isTrue();
+
+            // Concluiu sem texto: a despedida foi pedida ao modelo depois do aceite e chegou ao lead.
+            assertThat(channel.sent).containsExactly("Combinado! Te espero sábado às 10h.");
 
             assertThat(source.completions).singleElement().satisfies(c -> {
                 assertThat(c.outputs()).containsEntry("resultado", "AGENDADO");

@@ -19,7 +19,9 @@ package io.kikwiflow.agents.runtime.loop;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.kikwiflow.agents.llm.LlmContent;
 import io.kikwiflow.agents.llm.LlmMessage;
+import io.kikwiflow.agents.llm.LlmRequest;
 import io.kikwiflow.agents.llm.LlmRouter;
+import io.kikwiflow.agents.llm.ToolChoice;
 import io.kikwiflow.agents.llm.fake.ScriptedLlmClient;
 import io.kikwiflow.agents.model.agent.AgentDefinition;
 import io.kikwiflow.agents.model.agent.AgentLimits;
@@ -215,6 +217,39 @@ class AgentTurnProcessorTest {
 
         assertThat(outcome).isInstanceOfSatisfying(TurnOutcome.Completed.class,
                 c -> assertThat(c.farewell()).isEqualTo("Combinado! Te espero terça às 10h."));
+    }
+
+    @Test
+    @DisplayName("Dado o modelo conclui sem escrever nada ao lead, então pede a última mensagem sem ferramentas")
+    void pedeDespedidaQuandoConcluiCalado() {
+        llm.thenCallTool("consultar_fipe", Map.of("placa", "ABC1D23"))
+                .thenCallTool("concluir_missao", Map.of("resultado", "AGENDADO",
+                        "dataAgendamento", "2026-10-27T10:00:00-03:00"))
+                .thenReply("Fechado! Te espero terça às 10h na loja.");
+
+        TurnOutcome outcome = processor.processTurn(mission, profile, conversation, List.of(fromLead("Pode ser")));
+
+        assertThat(outcome).isInstanceOfSatisfying(TurnOutcome.Completed.class, c -> {
+            assertThat(llm.received()).hasSize(2); // a despedida só é pedida depois do aceite do motor
+            assertThat(c.outputs()).containsEntry("resultado", "AGENDADO");
+            assertThat(c.resolveFarewell()).isEqualTo("Fechado! Te espero terça às 10h na loja.");
+        });
+        LlmRequest closing = llm.received().get(2);
+        assertThat(closing.toolChoice().mode()).isEqualTo(ToolChoice.Mode.NONE);
+        assertThat(closing.messages().getLast().content()).last()
+                .isInstanceOfSatisfying(LlmContent.ToolResult.class,
+                        r -> assertThat(r.content()).isEqualTo(AgentTurnProcessor.CLOSING_REQUEST));
+    }
+
+    @Test
+    @DisplayName("Dado o pedido da despedida falha, então a missão conclui assim mesmo, sem mensagem")
+    void concluiMesmoSemDespedida() {
+        llm.thenCallTool("concluir_missao", Map.of("resultado", "AGENDADO",
+                "dataAgendamento", "2026-10-27T10:00:00-03:00"));  // roteiro acaba: a chamada extra falha
+
+        TurnOutcome outcome = processor.processTurn(mission, profile, conversation, List.of(fromLead("Pode ser")));
+
+        assertThat(outcome).isInstanceOfSatisfying(TurnOutcome.Completed.class, c -> assertThat(c.resolveFarewell()).isEmpty());
     }
 
     @Test

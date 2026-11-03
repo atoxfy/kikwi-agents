@@ -26,6 +26,7 @@ import io.kikwiflow.agents.llm.LlmResponse;
 import io.kikwiflow.agents.llm.LlmRouter;
 import io.kikwiflow.agents.llm.LlmTool;
 import io.kikwiflow.agents.llm.LlmUsage;
+import io.kikwiflow.agents.llm.ToolChoice;
 import io.kikwiflow.agents.model.agent.AgentDefinition;
 import io.kikwiflow.agents.model.agent.ModelRef;
 import io.kikwiflow.agents.model.conversation.Conversation;
@@ -47,6 +48,9 @@ import io.kikwiflow.agents.runtime.tool.ToolContext;
 import io.kikwiflow.agents.runtime.tool.AgentToolResolver;
 import io.kikwiflow.agents.runtime.tool.ToolRegistry;
 import io.kikwiflow.agents.runtime.tool.ToolResult;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -72,7 +76,12 @@ import java.util.Set;
  */
 public class AgentTurnProcessor {
 
+    private static final Logger log = LoggerFactory.getLogger(AgentTurnProcessor.class);
     private static final int MAX_TOKENS = 1024;
+    /** Resultado do concluir_missao quando o modelo concluiu sem escrever nada ao lead. */
+    static final String CLOSING_REQUEST = "Missão concluída e registrada. Escreva agora a sua última mensagem ao lead, "
+            + "em texto: confirme o combinado (no agendamento: dia, hora e endereço) ou despeça-se com cordialidade. "
+            + "Não chame ferramentas.";
     /** Imagens/PDFs entregues ao modelo por turno (os mais recentes); os demais ficam só como referência. */
     static final int MAX_MEDIA = 8;
     /** Limite por arquivo dos provedores para imagem inline. */
@@ -180,7 +189,20 @@ public class AgentTurnProcessor {
                     case BuiltinTools.CONCLUIR_MISSAO -> {
                         List<String> missing = missingRequired(mission.outputContract(), call.input());
                         if (missing.isEmpty()) {
-                            return new TurnOutcome.Completed(call.input(), String.join("\n\n", said), usage);
+                            String farewell = String.join("\n\n", said);
+                            if (!farewell.isBlank()) {
+                                return new TurnOutcome.Completed(call.input(), farewell, usage);
+                            }
+                            // Há modelos (ex.: Gemini) que concluem só com chamadas de ferramenta, sem uma palavra ao
+                            // lead: a última mensagem é pedida numa chamada sem ferramentas, depois do aceite do motor.
+                            List<LlmContent> closing = new ArrayList<>(results);
+                            closing.add(new LlmContent.ToolResult(call.id(), CLOSING_REQUEST, false));
+                            List<LlmMessage> closingMessages = new ArrayList<>(messages);
+                            closingMessages.add(new LlmMessage(LlmMessage.Role.USER, closing));
+                            LlmRequest closingRequest = new LlmRequest(model.model(), system, closingMessages, tools,
+                                    ToolChoice.none(), maxTokens, agent.model().temperature(), null);
+                            return new TurnOutcome.Completed(call.input(), "", usage,
+                                    () -> lateFarewell(client, closingRequest, mission));
                         }
                         results.add(new LlmContent.ToolResult(call.id(),
                                 "Faltam campos obrigatórios: " + String.join(", ", missing)
@@ -199,6 +221,17 @@ public class AgentTurnProcessor {
             messages.add(new LlmMessage(LlmMessage.Role.USER, results));
         }
         return new TurnOutcome.Exhausted("Limite de " + maxToolIterations + " iterações de ferramenta no turno", usage);
+    }
+
+    private static String lateFarewell(LlmClient client, LlmRequest request, Mission mission) {
+        try {
+            String text = client.generate(request).text();
+            return text == null ? "" : text.strip();
+        } catch (RuntimeException e) {
+            // A conclusão já valeu: sem despedida, o lead só não recebe a última mensagem.
+            log.warn("Missão {} concluída sem mensagem final ao lead: {}", mission.taskId(), e.getMessage());
+            return "";
+        }
     }
 
     private LlmContent.ToolResult invokeBusinessTool(Mission mission, ToolContext context,
