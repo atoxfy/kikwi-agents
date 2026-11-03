@@ -32,6 +32,8 @@ import java.util.regex.Pattern;
  * chegam ao modelo como dados, separadas das instruções. Personalizar um agente é publicar uma nova versão.
  *
  * @param version 0 = rascunho; versões publicadas começam em 1 e são imutáveis.
+ * @param mode    conversacional (fala com uma pessoa) ou tarefa técnica, sem interlocutor ({@link AgentMode}); vazio =
+ *                conversacional.
  */
 public record AgentDefinition(String key,
                               int version,
@@ -46,7 +48,8 @@ public record AgentDefinition(String key,
                               AgentPerception perception,
                               List<AgentToolRef> tools,
                               List<String> subagents,
-                              AgentLimits limits) {
+                              AgentLimits limits,
+                              AgentMode mode) {
 
     private static final Pattern PARAMETER = Pattern.compile("\\{\\{\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*}}");
 
@@ -58,6 +61,21 @@ public record AgentDefinition(String key,
         subagents = subagents == null ? List.of() : List.copyOf(subagents);
         limits = limits == null ? new AgentLimits(null) : limits;
         status = status == null ? AgentStatus.DRAFT : status;
+        mode = mode == null ? AgentMode.CONVERSATIONAL : mode;
+    }
+
+    /** Agente conversacional (o formato anterior ao {@code mode}). */
+    public AgentDefinition(String key, int version, AgentStatus status, String tenantId, String name, String description,
+                           String instructions, List<AgentParameter> parameters, Map<String, String> parameterValues,
+                           AgentModelSettings model, AgentPerception perception, List<AgentToolRef> tools,
+                           List<String> subagents, AgentLimits limits) {
+        this(key, version, status, tenantId, name, description, instructions, parameters, parameterValues, model,
+                perception, tools, subagents, limits, AgentMode.CONVERSATIONAL);
+    }
+
+    /** {@code true} para agente de tarefa técnica (sem conversa). */
+    public boolean isTask() {
+        return mode == AgentMode.TASK;
     }
 
     /** O modelo como {@code provider:model}. */
@@ -99,21 +117,21 @@ public record AgentDefinition(String key,
 
     public AgentDefinition withVersion(int newVersion, AgentStatus newStatus) {
         return new AgentDefinition(key, newVersion, newStatus, tenantId, name, description, instructions, parameters,
-                parameterValues, model, perception, tools, subagents, limits);
+                parameterValues, model, perception, tools, subagents, limits, mode);
     }
 
     public AgentDefinition withTenant(String newTenantId) {
         return new AgentDefinition(key, version, status, newTenantId, name, description, instructions, parameters,
-                parameterValues, model, perception, tools, subagents, limits);
+                parameterValues, model, perception, tools, subagents, limits, mode);
     }
 
     public AgentDefinition withParameterValues(Map<String, String> values) {
         return new AgentDefinition(key, version, status, tenantId, name, description, instructions, parameters,
-                values, model, perception, tools, subagents, limits);
+                values, model, perception, tools, subagents, limits, mode);
     }
 
     public AgentDefinition withModel(AgentModelSettings newModel) {
         return new AgentDefinition(key, version, status, tenantId, name, description, instructions, parameters,
-                parameterValues, newModel, perception, tools, subagents, limits);
+                parameterValues, newModel, perception, tools, subagents, limits, mode);
     }
 }

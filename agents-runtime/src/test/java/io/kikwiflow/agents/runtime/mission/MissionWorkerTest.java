@@ -25,6 +25,7 @@ import io.kikwiflow.agents.llm.LlmRouter;
 import io.kikwiflow.agents.llm.fake.ScriptedLlmClient;
 import io.kikwiflow.agents.model.agent.AgentDefinition;
 import io.kikwiflow.agents.model.agent.AgentLimits;
+import io.kikwiflow.agents.model.agent.AgentMode;
 import io.kikwiflow.agents.model.agent.AgentModelSettings;
 import io.kikwiflow.agents.model.agent.AgentParameter;
 import io.kikwiflow.agents.model.agent.AgentStatus;
@@ -135,6 +136,99 @@ class MissionWorkerTest {
 
     private List<Message> transcript() {
         return store.findLast("conv-1", 100);
+    }
+
+    @Nested
+    @DisplayName("Dado um agente de tarefa técnica (sem conversa)")
+    class TaskMode {
+
+        private final AgentDefinition classifier = new AgentDefinition("classificador", 1, AgentStatus.PUBLISHED,
+                "loja-exemplo", "Classificador", null, "Classifique o documento recebido.", List.of(), Map.of(),
+                new AgentModelSettings("fake:roteiro", null, null), null, List.of(), List.of(), new AgentLimits(10),
+                AgentMode.TASK);
+        private final List<OutputField> taskContract = List.of(new OutputField("categoria", "Categoria", null,
+                "SINGLE_SELECT", true, List.of("FISCAL", "CONTRATO", "OUTRO"), Map.of()));
+        private MissionWorker taskWorker;
+
+        @BeforeEach
+        void taskWorker() {
+            Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
+            ToolRegistry registry = new ToolRegistry();
+            AgentTurnProcessor processor = new AgentTurnProcessor(new LlmRouter(List.of(llm)),
+                    new AgentToolResolver(registry, null), registry, new MissionSourceActivityRecorder(source, WORKER),
+                    new ObjectMapper(), clock, 4);
+            MissionWorkerSettings settings = new MissionWorkerSettings(WORKER, List.of("kikwi.agents"), 5,
+                    Duration.ofMinutes(10), 40, "resultado", "HUMANO", "Vou chamar uma pessoa do time.", 2,
+                    Duration.ofMinutes(1));
+            taskWorker = new MissionWorker(source, (tenantId, key, version) -> Optional.of(classifier), processor,
+                    store, store, store, channel, clock, settings, Runnable::run);
+        }
+
+        private Mission task(String taskId) {
+            // businessKey sem conversa: a tarefa não depende de uma.
+            return new Mission(taskId, "pi-9", "loja-exemplo", "doc-42", "classificador", null, List.of(),
+                    "Classifique o documento {{documento}}.", taskContract, MissionLimits.none(),
+                    Map.of("documento", "nota-fiscal.pdf"), NOW.plusSeconds(600), NOW.minusSeconds(60), null);
+        }
+
+        @Test
+        @DisplayName("Quando o agente conclui, então completa a missão sem conversa nem mensagem a ninguém")
+        void completesWithoutConversation() {
+            source.available.add(task("task-t1"));
+            llm.thenCallTool(BuiltinTools.CONCLUIR_MISSAO, Map.of("categoria", "FISCAL"));
+
+            taskWorker.poll();
+
+            assertThat(source.completions).singleElement()
+                    .satisfies(c -> assertThat(c.outputs()).containsEntry("categoria", "FISCAL"));
+            assertThat(channel.sent).isEmpty();
+            assertThat(taskWorker.activeMissionIds()).isEmpty();
+            assertThat(llm.received().getFirst().system()).contains("tarefa técnica, sem interlocutor")
+                    .doesNotContain("Nunca diga ao contato");
+            assertThat(llm.received().getFirst().tools()).extracting(t -> t.name())
+                    .contains(BuiltinTools.CONCLUIR_MISSAO, BuiltinTools.ESCALAR_HUMANO);
+            assertThat(source.activities).anySatisfy(a -> assertThat(a.data()).containsEntry("mode", "task")
+                    .doesNotContainKey("conversationRef"));
+        }
+
+        @Test
+        @DisplayName("Quando o modelo escreve em vez de concluir, então o worker insiste e ele conclui")
+        void nudgesThenCompletes() {
+            source.available.add(task("task-t2"));
+            llm.thenReply("Acho que é uma nota fiscal.")
+                    .thenCallTool(BuiltinTools.CONCLUIR_MISSAO, Map.of("categoria", "FISCAL"));
+
+            taskWorker.poll();
+
+            assertThat(source.completions).singleElement();
+            assertThat(llm.received().get(1).messages().getLast().content().getFirst())
+                    .isEqualTo(new io.kikwiflow.agents.llm.LlmContent.Text(AgentTurnProcessor.TASK_NUDGE));
+        }
+
+        @Test
+        @DisplayName("Quando o modelo nunca conclui, então a missão falha depois das insistências")
+        void failsAfterNudges() {
+            source.available.add(task("task-t3"));
+            llm.thenReply("a").thenReply("b").thenReply("c");
+
+            taskWorker.poll();
+
+            assertThat(source.completions).isEmpty();
+            assertThat(source.failures).singleElement()
+                    .satisfies(f -> assertThat(f.message()).contains("em vez de concluir"));
+        }
+
+        @Test
+        @DisplayName("Quando o agente pede uma pessoa, então completa com resultado HUMANO para o processo rotear")
+        void handsOffToHuman() {
+            source.available.add(task("task-t4"));
+            llm.thenCallTool(BuiltinTools.ESCALAR_HUMANO, Map.of("motivo", "documento ilegível"));
+
+            taskWorker.poll();
+
+            assertThat(source.completions).singleElement()
+                    .satisfies(c -> assertThat(c.outputs()).containsEntry("resultado", "HUMANO"));
+        }
     }
 
     @Nested

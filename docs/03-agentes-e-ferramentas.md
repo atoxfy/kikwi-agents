@@ -5,7 +5,7 @@
 | Camada | Onde vive | Quem muda | Exemplo |
 |---|---|---|---|
 | Instruções do agente | `AgentDefinition` no catálogo (versionado, por tenant) | Dono do agente (Agent Studio) / personalização | "Você é {{nomeAgente}}, da {{loja}}; uma pergunta por mensagem; nunca promete valor de compra." |
-| Objetivo da missão | `kikwi:prompt` no nó `AGENT_TASK` | Quem desenha o processo | "Qualifique o veículo de {{leadNome}} e agende a visita." |
+| Objetivo da missão | `kikwi:prompt` no nó `AGENT_TASK` | Quem desenha o processo | "Qualifique o veículo de {{contatoNome}} e agende a visita." |
 | Contrato de saída | `variableBindings.outputs` do nó + catálogo | Quem desenha o processo | `resultado` (AGENDADO/PERDIDO/HUMANO), `dataAgendamento`, `fotosVeiculo` |
 
 `SystemPromptAssembler` sempre junta as camadas nesta ordem:
@@ -30,6 +30,20 @@ atendido?" mesmo depois de dez versões.
   Studio), `POST /{key}/publish`, `POST /{key}/personalize`, `GET /{key}/versions/{v}`.
 - Os agentes de exemplo (`agents-app/src/main/resources/agents/*.agent.json`) são publicados no tenant de
   demonstração na subida, se ainda não existirem.
+
+## Tipos de agente (`mode`)
+
+Uma organização tem quantos agentes quiser no catálogo (cada um com sua chave, versões e personalização); o processo
+escolhe qual atua em cada `AGENT_TASK` pelo `agentRef`. Nem todo agente conversa:
+
+| `mode` | Para quê | Como a missão roda |
+|---|---|---|
+| `conversational` (padrão) | atender uma pessoa num canal (site, WhatsApp) | liga-se à conversa do `businessKey`; cada mensagem é um turno; termina ao concluir o contrato, no handoff ou no opt-out |
+| `task` | trabalho técnico sem interlocutor: classificar, extrair, conferir, enriquecer, redigir | sem conversa: o agente recebe o objetivo e os dados da missão, usa as ferramentas e conclui o contrato numa execução; se escrever em vez de concluir, o worker insiste (2x) e depois falha; `escalar_humano` vira pedido de revisão (`resultado = HUMANO`) |
+
+Os dois passam pelo mesmo governo do processo (versão do agente, contrato de saída, prazos, auditoria `AGENT_*`) e pela
+mesma seção de segurança no prompt. Um agente `task` pode trabalhar na mesma instância de um conversacional (ex.: o
+conversacional colhe os dados, o de tarefa confere e classifica) ou sozinho num processo sem canal.
 
 ## Ferramentas
 

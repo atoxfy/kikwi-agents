@@ -22,6 +22,8 @@ import io.kikwiflow.agents.channel.OutboundMessage;
 import io.kikwiflow.agents.conversation.ConversationLock;
 import io.kikwiflow.agents.conversation.ConversationRepository;
 import io.kikwiflow.agents.conversation.MessageRepository;
+import io.kikwiflow.agents.llm.LlmContent;
+import io.kikwiflow.agents.llm.LlmMessage;
 import io.kikwiflow.agents.llm.LlmUsage;
 import io.kikwiflow.agents.model.agent.AgentDefinition;
 import io.kikwiflow.agents.model.conversation.Conversation;
@@ -47,6 +49,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 
 /**
  * Liga as missões do motor às conversas (doc 01, "Ciclo de vida de uma conversa"):
@@ -64,6 +68,10 @@ import java.util.concurrent.ConcurrentHashMap;
  * fila e a próxima aquisição (aqui ou em outro nó) relê a transcrição. Turnos da mesma conversa rodam um por vez,
  * sob o {@link ConversationLock}.
  *
+ * <p>Agente de tarefa técnica ({@code mode = task}): a missão não se liga a conversa nenhuma. O worker roda o agente
+ * com os dados da missão, em segundo plano, até ele concluir o contrato, pedir revisão humana ({@code resultado =
+ * HUMANO}) ou falhar; se o modelo escrever em vez de concluir, insiste {@value #MAX_TASK_NUDGES} vezes.
+ *
  * <p>Nenhuma regra de negócio mora aqui: o que acontece depois de cada saída é rota do processo.
  */
 public class MissionWorker {
@@ -73,6 +81,8 @@ public class MissionWorker {
 
     /** Quantas vezes o agente pode tentar de novo depois de o motor recusar o contrato, antes da falha técnica. */
     private static final int MAX_REJECTED_COMPLETIONS = 2;
+    /** Quantas vezes a tarefa pode responder em texto (em vez de concluir) antes da falha. */
+    private static final int MAX_TASK_NUDGES = 2;
 
     private static final Logger log = LoggerFactory.getLogger(MissionWorker.class);
 
@@ -85,6 +95,7 @@ public class MissionWorker {
     private final OutboundGateway outbound;
     private final Clock clock;
     private final MissionWorkerSettings settings;
+    private final Executor tasks;
 
     private final Map<String, ActiveMission> active = new ConcurrentHashMap<>();
 
@@ -97,6 +108,22 @@ public class MissionWorker {
                          OutboundGateway outbound,
                          Clock clock,
                          MissionWorkerSettings settings) {
+        this(source, agents, processor, conversations, messages, lock, outbound, clock, settings,
+                Executors.newVirtualThreadPerTaskExecutor());
+    }
+
+    /** @param tasks onde rodam as missões de tarefa técnica (os testes passam um executor síncrono). */
+    public MissionWorker(MissionSource source,
+                         AgentDefinitionRepository agents,
+                         AgentTurnProcessor processor,
+                         ConversationRepository conversations,
+                         MessageRepository messages,
+                         ConversationLock lock,
+                         OutboundGateway outbound,
+                         Clock clock,
+                         MissionWorkerSettings settings,
+                         Executor tasks) {
+        this.tasks = tasks;
         this.source = source;
         this.agents = agents;
         this.processor = processor;
@@ -186,6 +213,14 @@ public class MissionWorker {
                     + mission.tenantId() + ")", 0, null);
             return;
         }
+        if (profile.get().isTask()) {
+            ActiveMission started = new ActiveMission(mission, profile.get());
+            active.put(mission.taskId(), started);
+            source.reportActivities(mission.taskId(), settings.workerId(),
+                    List.of(processor.missionStarted(mission, started.profile())));
+            tasks.execute(() -> runTask(started));
+            return;
+        }
         Conversation conversation = conversations.findById(mission.businessKey())
                 .filter(c -> c.tenantId().equals(mission.tenantId()))
                 .orElse(null);
@@ -239,6 +274,81 @@ public class MissionWorker {
         } catch (MissionLeaseLostException e) {
             log.info("Missão {} interrompida durante o turno", mission.taskId());
             release(mission);
+        }
+    }
+
+    /** Uma missão de tarefa técnica, do começo ao fim, sem conversa. */
+    private void runTask(ActiveMission mission) {
+        List<LlmMessage> history = new ArrayList<>();
+        int nudges = 0;
+        int rejections = 0;
+        try {
+            while (true) {
+                mission.turns++;
+                String limit = limitReached(mission);
+                if (limit != null) {
+                    fail(mission, limit);
+                    return;
+                }
+                TurnOutcome outcome;
+                try {
+                    outcome = processor.processTask(mission.mission(), mission.profile(), history);
+                } catch (MissionLeaseLostException e) {
+                    throw e;
+                } catch (RuntimeException e) {
+                    log.warn("Tarefa da missão {} falhou", mission.taskId(), e);
+                    fail(mission, "Falha na tarefa do agente: " + e.getMessage());
+                    return;
+                }
+                mission.usage = mission.usage.plus(outcome.usage());
+                switch (outcome) {
+                    case TurnOutcome.Completed completed -> {
+                        try {
+                            source.complete(mission.taskId(), settings.workerId(), completed.outputs(), report(mission));
+                            drop(mission.taskId());
+                            return;
+                        } catch (MissionOutputRejectedException e) {
+                            if (++rejections >= MAX_REJECTED_COMPLETIONS) {
+                                fail(mission, "Contrato de saída recusado " + rejections + " vezes: " + e.problems());
+                                return;
+                            }
+                            history.add(new LlmMessage(LlmMessage.Role.USER, List.of(new LlmContent.Text(
+                                    "O sistema recusou a conclusão: " + String.join("; ", e.problems())
+                                            + ". Corrija e conclua de novo."))));
+                        }
+                    }
+                    case TurnOutcome.HandedOff handedOff -> {
+                        try {
+                            source.complete(mission.taskId(), settings.workerId(),
+                                    Map.of(settings.handoffOutputKey(), settings.handoffOutputValue()), report(mission));
+                            drop(mission.taskId());
+                        } catch (MissionOutputRejectedException e) {
+                            fail(mission, "O contrato da missão não aceita a revisão humana (" + settings.handoffOutputKey()
+                                    + "=" + settings.handoffOutputValue() + "): " + e.problems());
+                        }
+                        return;
+                    }
+                    case TurnOutcome.Reply reply -> {
+                        if (++nudges > MAX_TASK_NUDGES) {
+                            fail(mission, "O agente respondeu em texto em vez de concluir a tarefa");
+                            return;
+                        }
+                        if (reply.text() != null && !reply.text().isBlank()) {
+                            history.add(new LlmMessage(LlmMessage.Role.ASSISTANT, List.of(new LlmContent.Text(reply.text()))));
+                        }
+                        history.add(new LlmMessage(LlmMessage.Role.USER,
+                                List.of(new LlmContent.Text(AgentTurnProcessor.TASK_NUDGE))));
+                        source.extendLock(mission.taskId(), settings.workerId(), settings.leaseDuration());
+                    }
+                    case TurnOutcome.Exhausted exhausted -> {
+                        fail(mission, exhausted.reason());
+                        return;
+                    }
+                }
+            }
+        } catch (MissionLeaseLostException e) {
+            log.info("Missão {} (tarefa) interrompida pelo processo", mission.taskId());
+            drop(mission.taskId());
         }
     }
 
@@ -325,6 +435,9 @@ public class MissionWorker {
     /** Solta a missão e a desliga da conversa (se ainda for a missão ativa dela). */
     private void release(ActiveMission mission) {
         drop(mission.taskId());
+        if (mission.profile() != null && mission.profile().isTask()) {
+            return;
+        }
         conversations.findById(mission.conversationId())
                 .filter(c -> mission.taskId().equals(c.activeMissionTaskId()))
                 .ifPresent(c -> conversations.save(c.withMission(c.processInstanceId(), null)));

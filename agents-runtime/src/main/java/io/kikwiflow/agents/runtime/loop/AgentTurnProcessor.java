@@ -64,15 +64,16 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Processa uma mensagem do lead dentro de uma missão: monta o pedido ao LLM, executa as ferramentas que ele
- * pedir (com auditoria) e devolve um {@link TurnOutcome}.
+ * Processa um turno de uma missão: monta o pedido ao LLM, executa as ferramentas que ele pedir (com auditoria) e
+ * devolve um {@link TurnOutcome}. Dois modos ({@code AgentDefinition.mode}): {@link #processTurn} para o agente
+ * conversacional (uma mensagem do contato) e {@link #processTask} para o agente de tarefa técnica (sem interlocutor:
+ * trabalha com os dados da missão e as ferramentas até concluir).
  *
  * <p>É sem estado: a transcrição vem do repositório de mensagens e a missão vem do motor. Dá para reprocessar o
  * mesmo turno depois de um crash, com uma ressalva: ferramentas com {@code sideEffect} já executadas aparecem na
  * auditoria e precisam ser idempotentes do lado de quem as implementa.
  *
- * <p>Texto que o modelo escreve junto com chamadas de ferramenta ("vou verificar...") não é enviado ao lead; só a
- * resposta final do turno é.
+ * <p>Na conversa, o texto que o modelo escreve no turno (inclusive junto de chamadas de ferramenta) vai para o contato.
  */
 public class AgentTurnProcessor {
 
@@ -82,6 +83,13 @@ public class AgentTurnProcessor {
     static final String CLOSING_REQUEST = "Missão concluída e registrada. Escreva agora a sua última mensagem ao contato, "
             + "em texto: confirme o que ficou combinado (datas, horários, locais, próximos passos) ou despeça-se com cordialidade. "
             + "Não chame ferramentas.";
+    /** A ordem que abre uma missão de tarefa técnica (não há mensagem de ninguém para responder). */
+    static final String TASK_KICKOFF = "Execute a missão agora com os dados do atendimento e as ferramentas disponíveis. "
+            + "Ao terminar, chame " + BuiltinTools.CONCLUIR_MISSAO + " com o resultado.";
+    /** Quando o modelo de uma tarefa escreve em vez de concluir. */
+    public static final String TASK_NUDGE = "Ninguém vai ler esta resposta: esta missão é uma tarefa sem interlocutor. "
+            + "Continue com as ferramentas e conclua com " + BuiltinTools.CONCLUIR_MISSAO + ", ou chame "
+            + BuiltinTools.ESCALAR_HUMANO + " se precisar de uma pessoa.";
     /** Imagens/PDFs entregues ao modelo por turno (os mais recentes); os demais ficam só como referência. */
     static final int MAX_MEDIA = 8;
     /** Limite por arquivo dos provedores para imagem inline. */
@@ -135,12 +143,35 @@ public class AgentTurnProcessor {
         data.put("model", agent.modelRef().toString());
         data.put("tools", List.copyOf(allowedTools(mission, agent)));
         data.put("promptHash", Hashing.shortSha256(SystemPromptAssembler.assemble(agent, mission)));
-        data.put("conversationRef", mission.businessKey());
+        data.put("mode", agent.mode().json());
+        if (!agent.isTask()) {
+            data.put("conversationRef", mission.businessKey());
+        }
         return new AgentActivity(AgentActivityType.AGENT_MISSION_STARTED, clock.instant(), data);
     }
 
     public TurnOutcome processTurn(Mission mission, AgentDefinition agent, Conversation conversation,
                                    List<Message> transcript) {
+        List<LlmMessage> messages = toLlmMessages(transcript, mediaFor(mission.tenantId(), agent, transcript));
+        return run(mission, agent, conversation, messages, false);
+    }
+
+    /**
+     * Um passo de uma missão de tarefa técnica: sem conversa, o pedido começa pela ordem de executar a missão e
+     * {@code history} guarda o que o modelo já fez (o worker reaproveita entre passos, ex.: depois de o motor recusar o
+     * contrato). Um {@link TurnOutcome.Reply} aqui é o modelo escrevendo em vez de concluir: o worker insiste ou falha.
+     *
+     * @param history mutável; vazio no primeiro passo.
+     */
+    public TurnOutcome processTask(Mission mission, AgentDefinition agent, List<LlmMessage> history) {
+        if (history.isEmpty()) {
+            history.add(new LlmMessage(LlmMessage.Role.USER, List.of(new LlmContent.Text(TASK_KICKOFF))));
+        }
+        return run(mission, agent, null, history, true);
+    }
+
+    private TurnOutcome run(Mission mission, AgentDefinition agent, Conversation conversation, List<LlmMessage> messages,
+                            boolean task) {
         Set<String> allowed = allowedTools(mission, agent);
         Map<String, ToolDefinition> businessTools = new LinkedHashMap<>();
         toolResolver.resolve(mission, agent, allowed).forEach(tool -> businessTools.put(tool.id(), tool));
@@ -151,17 +182,18 @@ public class AgentTurnProcessor {
         for (ToolDefinition tool : businessTools.values()) {
             tools.add(new LlmTool(tool.id(), tool.description(), tool.inputSchema()));
         }
-        tools.add(new LlmTool(BuiltinTools.CONCLUIR_MISSAO,
-                "Encerra a missão entregando os dados coletados. Use só quando tiver os campos obrigatórios.",
+        tools.add(new LlmTool(BuiltinTools.CONCLUIR_MISSAO, task
+                ? "Entrega o resultado da tarefa. Use quando tiver todos os campos obrigatórios, sem inventar valores."
+                : "Encerra a missão entregando os dados coletados. Use só quando tiver os campos obrigatórios.",
                 OutputSchemaBuilder.build(mission.outputContract())));
-        tools.add(new LlmTool(BuiltinTools.ESCALAR_HUMANO,
-                "Transfere a conversa para um atendente humano.",
+        tools.add(new LlmTool(BuiltinTools.ESCALAR_HUMANO, task
+                ? "Pede a revisão de uma pessoa: quando faltam dados que nenhuma ferramenta dá ou a decisão exige alguém."
+                : "Transfere a conversa para um atendente humano.",
                 Map.of("type", "object",
                         "properties", Map.of("motivo", Map.of("type", "string")),
                         "required", List.of("motivo"))));
 
         String system = SystemPromptAssembler.assemble(agent, mission);
-        List<LlmMessage> messages = toLlmMessages(transcript, mediaFor(mission.tenantId(), agent, transcript));
         LlmUsage usage = LlmUsage.zero();
         ToolContext context = new ToolContext(mission, conversation);
         // O que o modelo escreve junto de uma chamada de ferramenta também é para o lead (ex.: "Combinado!" ao
@@ -190,6 +222,10 @@ public class AgentTurnProcessor {
                         List<String> missing = missingRequired(mission.outputContract(), call.input());
                         if (missing.isEmpty()) {
                             String farewell = String.join("\n\n", said);
+                            if (task) {
+                                // Ninguém lê: sem despedida.
+                                return new TurnOutcome.Completed(call.input(), "", usage);
+                            }
                             if (!farewell.isBlank()) {
                                 return new TurnOutcome.Completed(call.input(), farewell, usage);
                             }
@@ -205,8 +241,10 @@ public class AgentTurnProcessor {
                                     () -> lateFarewell(client, closingRequest, mission));
                         }
                         results.add(new LlmContent.ToolResult(call.id(),
-                                "Faltam campos obrigatórios: " + String.join(", ", missing)
-                                        + ". Pergunte ao contato antes de concluir.", true));
+                                "Faltam campos obrigatórios: " + String.join(", ", missing) + (task
+                                        ? ". Obtenha pelos dados ou pelas ferramentas; se não for possível, chame "
+                                                + BuiltinTools.ESCALAR_HUMANO + "."
+                                        : ". Pergunte ao contato antes de concluir."), true));
                     }
                     case BuiltinTools.ESCALAR_HUMANO -> {
                         Object motivo = call.input().get("motivo");

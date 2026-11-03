@@ -103,6 +103,6 @@ public class AgentCatalogController {
     private static AgentDefinition withKey(AgentDefinition d, String key) {
         return new AgentDefinition(key, d.version(), d.status(), d.tenantId(), d.name(), d.description(),
                 d.instructions(), d.parameters(), d.parameterValues(), d.model(), d.perception(), d.tools(),
-                d.subagents(), d.limits());
+                d.subagents(), d.limits(), d.mode());
     }
 }
