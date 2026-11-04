@@ -57,7 +57,7 @@
 
     <properties>
         <java.version>21</java.version>
-        <kikwiflow.version>0.1.83</kikwiflow.version>
+        <kikwiflow.version>0.1.84</kikwiflow.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
