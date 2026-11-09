@@ -31,7 +31,10 @@
   do cliente), executor `criarNegocioCrm` (CRM do cliente) e `registrarPerda`.
 - Perfis `pre-vendas` e `recuperacao`; avaliação com conversas de referência antes de ligar.
 - DMS: service account com papel de escrita dedicado (hoje o upload exige `ROLE_ADMIN`).
-- Painel mínimo do consultor: ver conversa, "assumir" (correlaciona `humano-assumiu:<conversationId>`), responder.
+- ~~Painel mínimo do consultor: ver conversa, "assumir", responder, concluir a etapa humana.~~ Feito no host
+  (2026-11-09): assumir com missão ativa conclui a missão com o resultado de handoff, usando o lease do worker do
+  próprio host. Pendente na lib: `MissionWorker.takeOver(conversationId, operador)`, para o host não repetir o
+  `handOff` nem depender da chave de lock `mission|<conversationId>`.
 - Piloto em uma franquia, com o processo humano atual em paralelo.
 
 ## Fase 3 — Plataforma
