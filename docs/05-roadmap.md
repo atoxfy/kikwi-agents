@@ -33,8 +33,11 @@
 - DMS: service account com papel de escrita dedicado (hoje o upload exige `ROLE_ADMIN`).
 - ~~Painel mínimo do consultor: ver conversa, "assumir", responder, concluir a etapa humana.~~ Feito no host
   (2026-11-09): assumir com missão ativa conclui a missão com o resultado de handoff, usando o lease do worker do
-  próprio host. Pendente na lib: `MissionWorker.takeOver(conversationId, operador)`, para o host não repetir o
-  `handOff` nem depender da chave de lock `mission|<conversationId>`.
+  próprio host. Na lib, 0.1.6: `MissionWorker.takeOver(conversationId, operador)` conclui a missão com o resultado
+  de handoff (sem mensagem ao contato, `takenOverBy` no relatório) e o host só chama.
+- ~~Canais plugáveis no host (Instagram, Slack, webhook genérico).~~ Feito no host (2026-11-10). Na lib, 0.1.6:
+  `ChannelType` deixa de ser enum e vira tipo aberto (`ChannelType.of("INSTAGRAM")`), com as mesmas constantes,
+  `valueOf`/`name()`, `==` e a forma serializada de antes.
 - Piloto em uma franquia, com o processo humano atual em paralelo.
 
 ## Fase 3 — Plataforma

@@ -67,6 +67,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DisplayName("MissionWorker")
 class MissionWorkerTest {
@@ -386,6 +387,96 @@ class MissionWorkerTest {
 
             assertThat(source.businessErrors).containsExactly(MissionWorker.OPT_OUT_ERROR_CODE);
             assertThat(worker.activeMissionIds()).isEmpty();
+        }
+    }
+
+    @Nested
+    @DisplayName("Dado uma pessoa que assume a conversa")
+    class TakeOver {
+
+        @Test
+        @DisplayName("Quando há missão em andamento, então ela conclui com HUMANO, sem mensagem ao contato, e a conversa vai para humano")
+        void endsActiveMission() {
+            source.available.add(mission("task-1", "pre-vendas", MissionLimits.none(), null));
+            llm.thenReply("Qual é o carro?");
+            worker.poll();
+            channel.sent.clear();
+
+            Conversation taken = worker.takeOver("conv-1", "joana");
+
+            assertThat(taken.status()).isEqualTo(ConversationStatus.HANDED_OFF);
+            assertThat(conversation().status()).isEqualTo(ConversationStatus.HANDED_OFF);
+            assertThat(conversation().activeMissionTaskId()).isNull();
+            assertThat(source.completions).singleElement().satisfies(c -> {
+                assertThat(c.outputs()).isEqualTo(Map.of("resultado", "HUMANO"));
+                assertThat(c.report()).containsEntry("takenOverBy", "joana").containsEntry("turns", 1);
+            });
+            assertThat(source.activities).filteredOn(a -> a.type() == AgentActivityType.AGENT_HANDOFF)
+                    .singleElement().satisfies(a -> assertThat(a.data()).containsEntry("reason", "assumida por joana"));
+            assertThat(worker.activeMissionIds()).isEmpty();
+            assertThat(channel.sent).isEmpty();
+            // A mensagem seguinte do contato não chega mais ao agente.
+            assertThat(worker.onMessage("conv-1", "task-1")).isFalse();
+        }
+
+        @Test
+        @DisplayName("Quando a missão não está neste nó mas o lease é deste worker, então conclui do mesmo jeito")
+        void missionFromBeforeRestart() {
+            store.save(conversation().withMission("pi-1", "task-antiga"));
+
+            worker.takeOver("conv-1", "joana");
+
+            assertThat(source.completions).singleElement().satisfies(c -> {
+                assertThat(c.taskId()).isEqualTo("task-antiga");
+                assertThat(c.report()).isEqualTo(Map.of("takenOverBy", "joana"));
+            });
+        }
+
+        @Test
+        @DisplayName("Quando o contrato do passo não aceita HUMANO, então lança a recusa e a conversa volta como estava")
+        void rejectedContractRestoresConversation() {
+            source.available.add(mission("task-1", "pre-vendas", MissionLimits.none(), null));
+            llm.thenReply("Qual é o carro?");
+            worker.poll();
+            source.rejectNextComplete = List.of("resultado: valor fora das opções");
+
+            assertThatThrownBy(() -> worker.takeOver("conv-1", "joana"))
+                    .isInstanceOf(MissionOutputRejectedException.class);
+
+            assertThat(conversation().status()).isEqualTo(ConversationStatus.OPEN);
+            assertThat(conversation().activeMissionTaskId()).isEqualTo("task-1");
+            assertThat(worker.activeMissionIds()).containsExactly("task-1");
+        }
+
+        @Test
+        @DisplayName("Quando a missão é de outro worker, então lança lease perdido e a conversa volta como estava")
+        void leaseLostRestoresConversation() {
+            store.save(conversation().withMission("pi-1", "task-outro"));
+            source.lost.add("task-outro");
+
+            assertThatThrownBy(() -> worker.takeOver("conv-1", "joana"))
+                    .isInstanceOf(MissionLeaseLostException.class);
+
+            assertThat(conversation().status()).isEqualTo(ConversationStatus.OPEN);
+            assertThat(conversation().activeMissionTaskId()).isEqualTo("task-outro");
+        }
+
+        @Test
+        @DisplayName("Quando não há missão, então só marca humano; se já estava com humano, não mexe")
+        void withoutMission() {
+            assertThat(worker.takeOver("conv-1", "joana").status()).isEqualTo(ConversationStatus.HANDED_OFF);
+            assertThat(worker.takeOver("conv-1", "outra").status()).isEqualTo(ConversationStatus.HANDED_OFF);
+
+            assertThat(source.completions).isEmpty();
+            assertThat(source.activities).isEmpty();
+        }
+
+        @Test
+        @DisplayName("Quando a conversa foi encerrada pelo contato, então recusa")
+        void closedConversation() {
+            store.save(conversation().withStatus(ConversationStatus.CLOSED));
+
+            assertThatThrownBy(() -> worker.takeOver("conv-1", "joana")).isInstanceOf(IllegalStateException.class);
         }
     }
 

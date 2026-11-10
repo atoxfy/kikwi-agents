@@ -50,7 +50,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
-import java.util.EnumMap;
+import java.util.LinkedHashMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -132,7 +132,7 @@ public class MongoConversationStore implements ConversationStore {
     }
 
     private static Contact contact(Document d) {
-        Map<ChannelType, String> identities = new EnumMap<>(ChannelType.class);
+        Map<ChannelType, String> identities = new LinkedHashMap<>();
         Document ids = d.get("identities", Document.class);
         if (ids != null) {
             ids.forEach((type, value) -> identities.put(ChannelType.valueOf(type), (String) value));

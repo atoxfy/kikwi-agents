@@ -184,6 +184,58 @@ public class MissionWorker {
         });
     }
 
+    /**
+     * Uma pessoa assume a conversa no lugar do agente. A conversa vai para {@code HANDED_OFF} e, com uma missão ativa,
+     * a missão conclui com o mesmo resultado de handoff de quando o próprio agente escala (o processo segue pela rota
+     * humana dele), com {@code AGENT_HANDOFF} e {@code takenOverBy} no relatório. Espera um turno em andamento
+     * terminar. Diferente do handoff do agente, não manda mensagem ao contato: quem assumiu fala por si.
+     *
+     * <p>Conversa já com humano: devolve como está. A missão não precisa estar em andamento neste nó (ex.: o app
+     * reiniciou): basta o lease ser deste worker.
+     *
+     * @throws IllegalArgumentException conversa inexistente
+     * @throws IllegalStateException conversa encerrada (opt-out)
+     * @throws MissionOutputRejectedException o contrato do passo não aceita o handoff; a conversa volta como estava
+     * @throws MissionLeaseLostException a missão não é deste worker (outro nó, ou já terminou); a conversa volta como
+     *         estava
+     */
+    public Conversation takeOver(String conversationId, String operator) {
+        return lock.withLock(lockKey(conversationId), () -> {
+            Conversation current = conversations.findById(conversationId)
+                    .orElseThrow(() -> new IllegalArgumentException("Conversa " + conversationId + " não encontrada"));
+            if (current.status() == ConversationStatus.CLOSED) {
+                throw new IllegalStateException("Conversa " + conversationId + " encerrada pelo contato");
+            }
+            if (current.status() == ConversationStatus.HANDED_OFF) {
+                return current;
+            }
+            String taskId = current.activeMissionTaskId();
+            // Antes de concluir: uma mensagem do contato que chegue enquanto o motor conclui já vai para o humano.
+            Conversation handed = conversations.save(current.withStatus(ConversationStatus.HANDED_OFF)
+                    .withMission(current.processInstanceId(), null));
+            if (taskId == null) {
+                return handed;
+            }
+            ActiveMission mission = active.get(taskId);
+            Map<String, Object> report = mission != null && mission.profile() != null
+                    ? report(mission) : new LinkedHashMap<>();
+            report.put("takenOverBy", operator);
+            try {
+                source.reportActivities(taskId, settings.workerId(), List.of(new AgentActivity(
+                        AgentActivityType.AGENT_HANDOFF, clock.instant(),
+                        Map.of("reason", "assumida por " + operator, "toHuman", true))));
+                source.complete(taskId, settings.workerId(),
+                        Map.of(settings.handoffOutputKey(), settings.handoffOutputValue()), report);
+            } catch (MissionOutputRejectedException | MissionLeaseLostException e) {
+                conversations.save(current);
+                throw e;
+            }
+            drop(taskId);
+            log.info("Conversa {} assumida por {}; missão {} concluída com handoff", conversationId, operator, taskId);
+            return handed;
+        });
+    }
+
     /** Renova o lease de todas as missões em andamento; solta as que o processo interrompeu. */
     public void renewLeases() {
         for (ActiveMission mission : List.copyOf(active.values())) {
